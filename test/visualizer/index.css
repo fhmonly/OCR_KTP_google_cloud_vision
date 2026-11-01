@@ -1,0 +1,16 @@
+.canvas-container {
+  /* Atur lebar dan tinggi maksimal kontainer sesuai area tampilan yang diinginkan */
+  max-width: 100%; /* Mengikuti lebar layar browser */
+
+  /* Ini adalah kunci agar muncul scrollbar X dan Y saat kanvas melampaui ukuran kontainer */
+  overflow: auto;
+
+  /* Opsional: Memberi batas visual agar area scroll terlihat jelas */
+  border: 1px solid #ccc;
+}
+
+#canvasBox {
+  /* Pastikan display diset ke block agar tidak ada celah spasi di bagian bawah */
+  display: block;
+  background-color: #f0f0f0; /* Opsional: warna latar kanvas */
+}

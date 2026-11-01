@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="id">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Visualisasi Text Bounding Box</title>
+    <style>
+      body {
+        font-family: Arial, sans-serif;
+        background-color: #f4f4f9;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        padding: 20px;
+      }
+      h2 {
+        color: #333;
+      }
+      canvas {
+        border: 2px solid #ccc;
+        background-color: #ffffff;
+        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+      }
+    </style>
+    <link rel="stylesheet" href="./index.css" />
+  </head>
+  <body>
+    <h2>Visualisasi Bounding Box Teks</h2>
+    <!-- Canvas untuk menggambar -->
+    <div class="canvas-container">
+      <canvas id="canvasBox" width="800" height="600"></canvas>
+    </div>
+
+    <script src="./index.js" type="module"></script>
+  </body>
+</html>
