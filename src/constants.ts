@@ -1,0 +1,18 @@
+export const KTP_DEFAULT_RESULT = {
+  provinsi: null,
+  kota: null,
+  nik: null,
+  nama: null,
+  ttl: null,
+  jenis_kelamin: null,
+  gol_darah: null,
+  alamat: null,
+  rt_rw: null,
+  kel_desa: null,
+  kecamatan: null,
+  agama: null,
+  status_perkawinan: null,
+  pekerjaan: null,
+  kewarganegaraan: null,
+  berlaku_hingga: null,
+};
