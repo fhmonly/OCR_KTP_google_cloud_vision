@@ -2,7 +2,12 @@ import { ImageAnnotatorClient, type v1 } from "@google-cloud/vision";
 import { applyCityFallback } from "./association/city-fallback.js";
 import { associateLabelValues } from "./association/label-value-association.js";
 import { KTP_LABELS } from "./extraction-config.js";
+import { detectWatermarks } from "./filtering/watermark/watermark-detection.js";
 import { sortWordBoxes } from "./sorting/sort-word-boxes.js";
+
+import { filterValidBoundingPoly } from "./filtering/bounding-poly/bounding-poly-filter.js";
+import { filterWatermarkBoxes } from "./filtering/watermark/watermark-filter.js";
+import type { TransformedTextAnnotation } from "./types.js";
 
 type ImageAnnotatorClientResponse = Awaited<
   ReturnType<v1.ImageAnnotatorClient["textDetection"]>
@@ -48,9 +53,9 @@ export class KTPExtractor {
 
   private _transformTextAnnotation(
     obj: Awaited<ReturnType<typeof this.getResponse>>["textAnnotations"],
-  ) {
+  ): TransformedTextAnnotation[] {
     return (
-      obj?.map((item) => {
+      obj?.map((item, index) => {
         const vertices: {
           x?: number | null;
           y?: number | null;
@@ -68,6 +73,7 @@ export class KTPExtractor {
         const y4 = v3?.y ?? 0;
 
         return {
+          originalIndex: index,
           label: item.description,
           vertices,
           dimension: {
@@ -83,13 +89,21 @@ export class KTPExtractor {
   public extractFromTextAnnotation(
     textAnnotation: ImageAnnotatorClientResponse["textAnnotations"],
   ) {
-    if (!textAnnotation?.length) return null;
+    if (!textAnnotation?.length) {
+      throw new Error("Missing or empty textAnnotation");
+    }
 
     const words = this._transformTextAnnotation(
       textAnnotation.slice(1, textAnnotation.length),
     );
 
-    const result = sortWordBoxes(words, {
+    // STEP 1: Validasi bounding polygon.
+    const boundingPolyResult = filterValidBoundingPoly(words);
+
+    console.log(boundingPolyResult.invalidBoxes);
+
+    // STEP 2: Sorting hanya menggunakan box valid.
+    const result = sortWordBoxes(boundingPolyResult.validBoxes, {
       degreeTolerance: 8,
       minClusterSize: 3,
       minSupportRatio: 0.35,
@@ -108,7 +122,33 @@ export class KTPExtractor {
       throw new Error("Orientation detection failed");
     }
 
-    const boxes = result.projected;
+    // STEP 1: Detect watermark.
+    const watermarkDetection = detectWatermarks(
+      result.projected,
+      result.orientation.degree,
+    );
+
+    // STEP 2: Filter confirmed watermark boxes.
+    const watermarkFiltering = filterWatermarkBoxes(
+      result.projected,
+      watermarkDetection,
+    );
+
+    // STEP 3: Use filtered boxes for association.
+    const boxes = watermarkFiltering.boxes;
+
+    // Filter rows as well because city fallback uses row data.
+    const removedIndexes = new Set(watermarkFiltering.removedIndexes);
+
+    const filteredRows = result.rows
+      .map((row) => ({
+        ...row,
+        boxes: row.boxes.filter(
+          (box) => !removedIndexes.has(box.originalIndex),
+        ),
+      }))
+      .filter((row) => row.boxes.length > 0);
+
     const definitions = KTP_LABELS;
     const labelThreshold = 0.65;
     const options = {
@@ -133,7 +173,7 @@ export class KTPExtractor {
     );
 
     const finalAssociation = applyCityFallback(
-      result.rows,
+      filteredRows,
       association,
       definitions,
     );
@@ -144,6 +184,15 @@ export class KTPExtractor {
 
     return {
       data,
+
+      watermark: {
+        detected: watermarkDetection.detected,
+        confidence: watermarkDetection.confidence,
+        candidateIndexes: watermarkDetection.candidateIndexes,
+        removedIndexes: watermarkFiltering.removedIndexes,
+        diagnostics: watermarkDetection.diagnostics,
+      },
+
       association: finalAssociation,
     };
   }

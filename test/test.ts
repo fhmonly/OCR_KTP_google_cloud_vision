@@ -1,5 +1,5 @@
 import { KTPExtractor } from "../src/KTPExtractor.js";
-import visionResult from "./visionSource/90-right.json" with { type: "json" };
+import visionResult from "./visionSource/real-90-right.json" with { type: "json" };
 
 const ktpext = new KTPExtractor();
 
@@ -19,4 +19,4 @@ const result = ktpext.extractFromTextAnnotation(
 // console.log("result.association.usedWordIndexes");
 // console.log(JSON.stringify(result?.association.usedWordIndexes));
 
-console.log(result?.data);
+console.log(result?.watermark);

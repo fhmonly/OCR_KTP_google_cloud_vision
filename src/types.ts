@@ -9,6 +9,7 @@ export interface Dimension {
 }
 
 export interface TransformedTextAnnotation {
+  originalIndex?: number;
   label: string | null | undefined;
   vertices: Vertex[];
   dimension: Dimension;

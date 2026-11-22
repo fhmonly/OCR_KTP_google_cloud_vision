@@ -14,5 +14,11 @@ export * from "./association/label-value-association.js";
 export * from "./association/value-candidate.js";
 
 export { applyCityFallback } from "./association/city-fallback.js";
-
 export type { CityFallbackOptions } from "./association/city-fallback.js";
+
+export * from "./filtering/watermark/watermark-detection.js";
+export * from "./filtering/watermark/watermark-filter.js";
+export * from "./filtering/watermark/watermark-types.js";
+
+export * from "./filtering/bounding-poly/bounding-poly-filter.js";
+export * from "./filtering/bounding-poly/bounding-poly-types.js";

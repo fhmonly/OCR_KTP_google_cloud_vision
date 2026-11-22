@@ -73,7 +73,7 @@ export function sortWordBoxes(
   let skipped = 0;
 
   boxes.forEach((box, index) => {
-    const result = projectWordBox(box, index, axes);
+    const result = projectWordBox(box, box.originalIndex ?? index, axes);
 
     if (!result) {
       skipped++;

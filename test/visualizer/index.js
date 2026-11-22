@@ -1,4 +1,4 @@
-import textData from "../visionSource/original.json" with { type: "json" };
+import textData from "../visionSource/real-90-right.json" with { type: "json" };
 import { drawBoundingBoxes } from "./canvas/drawBoundingBox.js";
 import { fixMabbOrientation } from "./canvas/fixMabbOrientation.js";
 import { getMinimumBoundingBox } from "./canvas/mabb.js";
@@ -8,7 +8,7 @@ document.addEventListener("DOMContentLoaded", () => {
   const canvas = document.getElementById("canvasBox");
 
   const transformed = transformTextAnnotation(
-    textData.textAnnotations.splice(1, textData.textAnnotations.length - 1),
+    textData.textAnnotations.slice(1, textData.textAnnotations.length),
   );
 
   const flatData = transformed.map((v) => v.vertices).flat();
@@ -28,7 +28,16 @@ document.addEventListener("DOMContentLoaded", () => {
   );
   const transformedMABB = transformTextAnnotation(textAnnotationMABB);
 
-  const finalTextAnnotation = [...transformed, ...transformedMABB];
+  const finalTextAnnotation = [
+    ...transformed,
+    // .filter(
+    //   (v, i) =>
+    //     ![16, 58, 59, 60, 61, 62, 63, 64, 65, 66, 67, 68, 69, 73, 74].includes(
+    //       i,
+    //     ),
+    // )
+    ...transformedMABB,
+  ];
 
   drawBoundingBoxes(canvas, finalTextAnnotation, {
     showLabel: true,
