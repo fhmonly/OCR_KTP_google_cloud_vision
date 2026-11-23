@@ -1,0 +1,179 @@
+<!doctype html>
+<html lang="id">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>KTP OCR Visualizer</title>
+  </head>
+  <body>
+    <div class="app">
+      <header>
+        <div>
+          <small>DEVELOPMENT TOOL</small>
+          <h1>KTP OCR Visualizer</h1>
+          <p>Inspect Vision annotations and create manual expected results.</p>
+        </div>
+        <div class="file-actions">
+          <label class="button" for="json-file">Choose Vision JSON</label>
+          <input id="json-file" type="file" accept=".json,application/json" />
+          <span id="dataset-name">No dataset loaded</span>
+        </div>
+      </header>
+
+      <main>
+        <section class="workspace">
+          <nav class="toolbar">
+            <div class="toolbar-group toolbar-group--overlay">
+              <label
+                ><input id="show-label" type="checkbox" checked /> Label</label
+              >
+              <label
+                ><input id="show-index" type="checkbox" checked /> Index</label
+              >
+              <label><input id="show-degree" type="checkbox" /> Degree</label>
+            </div>
+
+            <div class="toolbar-group toolbar-group--canvas">
+              <label for="bg-preset">Canvas</label>
+              <select id="bg-preset">
+                <option value="#ffffff">White</option>
+                <option value="#f3f4f6">Light gray</option>
+                <option value="#e5e7eb">Gray</option>
+                <option value="#1f2937">Dark gray</option>
+                <option value="#111827">Black</option>
+                <option value="#e0f2fe">Light blue</option>
+                <option value="#dcfce7">Light green</option>
+                <option value="#fef3c7">Cream</option>
+                <option value="custom">Custom</option>
+              </select>
+              <input
+                id="bg-color"
+                type="color"
+                value="#ffffff"
+                aria-label="Custom canvas color"
+              />
+              <input
+                id="bg-hex"
+                type="text"
+                value="#FFFFFF"
+                maxlength="7"
+                placeholder="#FFFFFF"
+                spellcheck="false"
+                aria-label="Canvas color hex"
+              />
+            </div>
+
+            <div class="toolbar-group toolbar-group--zoom">
+              <button
+                id="zoom-out"
+                class="button secondary icon"
+                title="Zoom out"
+              >
+                −
+              </button>
+              <span id="zoom-level" class="zoom-level">100%</span>
+              <button
+                id="zoom-in"
+                class="button secondary icon"
+                title="Zoom in"
+              >
+                +
+              </button>
+              <button id="zoom-reset" class="button secondary">
+                Reset view
+              </button>
+            </div>
+
+            <div class="toolbar-group toolbar-group--image">
+              <label class="button secondary" for="image-file"
+                >Add KTP image</label
+              >
+              <input id="image-file" type="file" accept="image/*" />
+              <button id="clear-image" class="button secondary" disabled>
+                Clear image
+              </button>
+            </div>
+          </nav>
+
+          <div id="canvas-wrap" class="canvas-wrap">
+            <canvas id="canvas"></canvas>
+            <div id="empty" class="empty">
+              <b>Choose a Google Vision JSON file</b>
+              <span>Bounding polygons will appear here.</span>
+            </div>
+          </div>
+
+          <footer>
+            <span id="canvas-meta">Waiting for dataset</span>
+            <span>Click a polygon to inspect its index</span>
+          </footer>
+        </section>
+
+        <aside>
+          <section class="panel">
+            <h2>Remove indexes</h2>
+            <p>Separate indexes with commas, spaces, or new lines.</p>
+            <textarea
+              id="remove-input"
+              rows="3"
+              placeholder="Example: 16, 58, 66, 72"
+            ></textarea>
+            <div class="actions">
+              <button id="remove" class="button primary" disabled>
+                Remove
+              </button>
+              <button id="restore-all" class="button secondary" disabled>
+                Restore all
+              </button>
+            </div>
+            <div id="message" role="status"></div>
+          </section>
+
+          <section class="panel">
+            <div class="panel-title">
+              <h2>Diagnostics</h2>
+              <button id="export" class="button secondary small" disabled>
+                Export expected JSON
+              </button>
+            </div>
+            <div class="stats">
+              <div><b id="total">0</b><small>Total</small></div>
+              <div><b id="remaining-count">0</b><small>Remaining</small></div>
+              <div><b id="removed-count">0</b><small>Removed</small></div>
+            </div>
+
+            <h3>
+              Remaining indexes
+              <button id="copy-remaining" class="link" disabled>Copy</button>
+            </h3>
+            <textarea id="remaining" rows="5" readonly></textarea>
+
+            <h3>
+              Removed indexes
+              <button id="copy-removed" class="link" disabled>Copy</button>
+            </h3>
+            <textarea id="removed" rows="4" readonly></textarea>
+
+            <h3>Restore selected indexes</h3>
+            <textarea
+              id="restore-input"
+              rows="2"
+              placeholder="Example: 66, 72"
+            ></textarea>
+            <button id="restore" class="button secondary wide" disabled>
+              Restore selected
+            </button>
+          </section>
+
+          <section class="panel">
+            <h2>Selected box</h2>
+            <div id="selected" class="selected">
+              Select a polygon on the canvas.
+            </div>
+          </section>
+        </aside>
+      </main>
+    </div>
+    <script type="module" src="/main.ts"></script>
+  </body>
+</html>

@@ -1,5 +1,5 @@
+import visionResult from "../datasets/90-right.json" with { type: "json" };
 import { KTPExtractor } from "../src/KTPExtractor.js";
-import visionResult from "./visionSource/real-90-right.json" with { type: "json" };
 
 const ktpext = new KTPExtractor();
 
