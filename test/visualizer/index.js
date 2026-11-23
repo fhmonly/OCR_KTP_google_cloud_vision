@@ -28,18 +28,21 @@ document.addEventListener("DOMContentLoaded", () => {
   );
   const transformedMABB = transformTextAnnotation(textAnnotationMABB);
 
-  const finalTextAnnotation = [
-    ...transformed,
-    // .filter(
-    //   (v, i) =>
-    //     ![16, 58, 59, 60, 61, 62, 63, 64, 65, 66, 67, 68, 69, 73, 74].includes(
-    //       i,
-    //     ),
-    // )
-    ...transformedMABB,
+  const removeWatermark = false;
+
+  const removedIdx = [
+    16, 58, 59, 60, 61, 62, 63, 64, 65, 66, 67, 68, 69, 73, 74,
   ];
+
+  const finalTextAnnotation = removeWatermark
+    ? [
+        ...transformed.filter((v, i) => !removedIdx.includes(i)),
+        ...transformedMABB,
+      ]
+    : [...transformed, ...transformedMABB];
 
   drawBoundingBoxes(canvas, finalTextAnnotation, {
     showLabel: true,
+    showIdx: true,
   });
 });

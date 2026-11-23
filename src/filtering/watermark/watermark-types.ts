@@ -1,4 +1,4 @@
-import type { ProjectedBox } from "../../types.js";
+import type { WatermarkGroup } from "./watermark-grouping.js";
 
 export type WatermarkClassification =
   | "main-text"
@@ -7,32 +7,15 @@ export type WatermarkClassification =
   | "unknown";
 
 export interface WatermarkDetectionOptions {
-  /**
-   * Sudut watermark relatif terhadap orientasi utama dokumen.
-   * -45 berarti diagonal dari kiri bawah ke kanan atas.
-   */
   targetAngle?: number;
-
-  /**
-   * Toleransi perbedaan sudut dalam derajat.
-   */
   angleTolerance?: number;
-
-  /**
-   * Jumlah minimal box diagonal untuk mengonfirmasi watermark.
-   */
   minCandidateCount?: number;
-
-  /**
-   * Proporsi minimal kandidat terhadap seluruh word boxes.
-   */
   minCandidateRatio?: number;
-
-  /**
-   * Proporsi minimal rentang horizontal kandidat
-   * terhadap rentang horizontal seluruh dokumen.
-   */
   minExtentRatio?: number;
+
+  normalToleranceFactor?: number;
+  maxGapFactor?: number;
+  minGroupSize?: number;
 }
 
 export interface WatermarkBoxDiagnostic {
@@ -41,26 +24,18 @@ export interface WatermarkBoxDiagnostic {
   relativeAngle: number;
   classification: WatermarkClassification;
   confidence: number;
+  groupId?: number;
   reason: string;
 }
 
 export interface WatermarkDetectionResult {
   detected: boolean;
-
   orientationDegree: number;
   targetAngle: number;
   angleTolerance: number;
-
   confidence: number;
-
   candidateIndexes: number[];
   watermarkIndexes: number[];
-
+  groups: WatermarkGroup[];
   diagnostics: WatermarkBoxDiagnostic[];
-}
-
-export interface WatermarkFilterResult {
-  boxes: ProjectedBox[];
-  removedBoxes: ProjectedBox[];
-  removedIndexes: number[];
 }

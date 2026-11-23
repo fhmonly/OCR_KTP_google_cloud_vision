@@ -22,3 +22,6 @@ export * from "./filtering/watermark/watermark-types.js";
 
 export * from "./filtering/bounding-poly/bounding-poly-filter.js";
 export * from "./filtering/bounding-poly/bounding-poly-types.js";
+
+export * from "./filtering/watermark/watermark-geometry.js";
+export * from "./filtering/watermark/watermark-grouping.js";

@@ -1,16 +1,15 @@
 import type { ProjectedBox } from "../../types.js";
 
+import { calculateWatermarkGeometry } from "./watermark-geometry.js";
+
+import { groupWatermarkCandidates } from "./watermark-grouping.js";
+
 import type {
   WatermarkBoxDiagnostic,
   WatermarkDetectionOptions,
   WatermarkDetectionResult,
 } from "./watermark-types.js";
 
-/**
- * Normalisasi sudut garis ke rentang [-90, 90).
- *
- * Orientasi garis 0 dan 180 dianggap sama.
- */
 function normalizeLineAngle(angle: number): number {
   return ((((angle + 90) % 180) + 180) % 180) - 90;
 }
@@ -26,9 +25,7 @@ interface Candidate {
 }
 
 function calculateHorizontalExtent(boxes: ProjectedBox[]): number {
-  if (boxes.length === 0) {
-    return 0;
-  }
+  if (boxes.length === 0) return 0;
 
   const minU = Math.min(...boxes.map((box) => box.uMin));
   const maxU = Math.max(...boxes.map((box) => box.uMax));
@@ -46,7 +43,7 @@ export function detectWatermarks(
   const angleTolerance = clamp(options.angleTolerance ?? 12, 1, 45);
 
   const minCandidateCount = Math.max(
-    2,
+    1,
     Math.floor(options.minCandidateCount ?? 4),
   );
 
@@ -54,38 +51,36 @@ export function detectWatermarks(
 
   const minExtentRatio = clamp(options.minExtentRatio ?? 0.25, 0, 1);
 
-  const candidates: Candidate[] = [];
-
-  const diagnostics: WatermarkBoxDiagnostic[] = [];
+  const emptyResult = (): WatermarkDetectionResult => ({
+    detected: false,
+    orientationDegree,
+    targetAngle,
+    angleTolerance,
+    confidence: 0,
+    candidateIndexes: [],
+    watermarkIndexes: [],
+    groups: [],
+    diagnostics: [],
+  });
 
   if (!Number.isFinite(orientationDegree) || boxes.length === 0) {
-    return {
-      detected: false,
-      orientationDegree,
-      targetAngle,
-      angleTolerance,
-      confidence: 0,
-      candidateIndexes: [],
-      watermarkIndexes: [],
-      diagnostics: [],
-    };
+    return emptyResult();
   }
 
-  // STEP 1: Cari box dengan orientasi diagonal yang sesuai.
+  const candidates: Candidate[] = [];
+  const diagnostics: WatermarkBoxDiagnostic[] = [];
+
+  // STEP 1: Kandidat berdasarkan sudut.
   for (const box of boxes) {
     const boxDegree = box.box.degree;
 
-    if (!Number.isFinite(boxDegree)) {
-      continue;
-    }
+    if (!Number.isFinite(boxDegree)) continue;
 
     const relativeAngle = normalizeLineAngle(boxDegree - orientationDegree);
 
     const angleError = normalizeLineAngle(relativeAngle - targetAngle);
 
-    if (Math.abs(angleError) > angleTolerance) {
-      continue;
-    }
+    if (Math.abs(angleError) > angleTolerance) continue;
 
     candidates.push({
       box,
@@ -99,7 +94,8 @@ export function detectWatermarks(
       relativeAngle,
       classification: "watermark-candidate",
       confidence: 0,
-      reason: "Orientasi box sesuai pola diagonal watermark.",
+      reason:
+        "Sudut box sesuai arah diagonal watermark; menunggu validasi spasial.",
     });
   }
 
@@ -107,11 +103,21 @@ export function detectWatermarks(
 
   const candidateIndexes = candidateBoxes.map((box) => box.originalIndex);
 
-  // STEP 2: Evaluasi dukungan kandidat.
+  // STEP 2: Spatial grouping untuk analisis dan diagnostics.
+  // Kegagalan masuk kelompok tidak otomatis membatalkan kandidat.
+  const geometry = calculateWatermarkGeometry(candidateBoxes, targetAngle);
+
+  const groups = groupWatermarkCandidates(geometry, {
+    normalToleranceFactor: options.normalToleranceFactor,
+    maxGapFactor: options.maxGapFactor,
+    minGroupSize: options.minGroupSize,
+  });
+
+  // Dukungan global tetap menggunakan seluruh kandidat sudut,
+  // seperti implementasi sebelumnya.
   const candidateRatio = candidates.length / boxes.length;
 
   const documentExtent = calculateHorizontalExtent(boxes);
-
   const candidateExtent = calculateHorizontalExtent(candidateBoxes);
 
   const extentRatio = documentExtent > 0 ? candidateExtent / documentExtent : 0;
@@ -124,7 +130,7 @@ export function detectWatermarks(
         ) / candidates.length
       : Infinity;
 
-  // STEP 3: Konfirmasi watermark.
+  // STEP 3: Konfirmasi menggunakan dukungan global.
   const detected =
     candidates.length >= minCandidateCount &&
     candidateRatio >= minCandidateRatio &&
@@ -150,29 +156,44 @@ export function detectWatermarks(
       0,
       1,
     );
+  }
 
-    // STEP 4: Naikkan klasifikasi kandidat menjadi watermark.
-    for (const diagnostic of diagnostics) {
+  // STEP 4: Diagnostics dan klasifikasi.
+
+  const groupByIndex = new Map<number, number>();
+
+  for (const group of groups) {
+    for (const index of group.indexes) {
+      groupByIndex.set(index, group.id);
+    }
+  }
+
+  for (const diagnostic of diagnostics) {
+    const groupId = groupByIndex.get(diagnostic.originalIndex);
+
+    if (groupId !== undefined) {
+      diagnostic.groupId = groupId;
+    }
+
+    if (detected) {
       diagnostic.classification = "watermark";
       diagnostic.confidence = confidence;
       diagnostic.reason =
-        "Termasuk kelompok teks diagonal yang memenuhi kriteria watermark.";
+        groupId !== undefined
+          ? "Kandidat memenuhi dukungan global watermark dan tergabung dalam kelompok spasial."
+          : "Kandidat memenuhi dukungan global watermark meskipun tidak tergabung dalam kelompok spasial.";
     }
   }
 
   return {
     detected,
-
     orientationDegree,
     targetAngle,
     angleTolerance,
-
     confidence,
-
     candidateIndexes,
-
     watermarkIndexes: detected ? [...candidateIndexes] : [],
-
+    groups,
     diagnostics,
   };
 }

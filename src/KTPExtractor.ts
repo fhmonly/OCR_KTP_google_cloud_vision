@@ -100,8 +100,6 @@ export class KTPExtractor {
     // STEP 1: Validasi bounding polygon.
     const boundingPolyResult = filterValidBoundingPoly(words);
 
-    console.log(boundingPolyResult.invalidBoxes);
-
     // STEP 2: Sorting hanya menggunakan box valid.
     const result = sortWordBoxes(boundingPolyResult.validBoxes, {
       degreeTolerance: 8,

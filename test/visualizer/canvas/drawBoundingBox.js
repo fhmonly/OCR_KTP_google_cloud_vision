@@ -2,9 +2,10 @@ function drawBox(
   ctx,
   item,
   idx,
-  { showIdx = false, showDegree = false, showLabel = false },
+  { showIdx = false, showDegree = false, showLabel = false } = {},
 ) {
   const [v1, v2, v3, v4] = item.vertices;
+  if (!v1 || !v2 || !v3 || !v4) return;
 
   // Pengaturan ketebalan garis global untuk fungsi ini
   ctx.lineWidth = 2;
@@ -53,23 +54,37 @@ function drawBox(
   ctx.strokeStyle = "#1e90ff"; // Biru
   ctx.stroke();
 
-  ctx.save(); // Simpan state canvas awal
+  // Susun teks hanya jika ada opsi yang diaktifkan
+  const parts = [];
+  if (showIdx) parts.push(`[${idx}]`);
+  if (showLabel && item.label) parts.push(item.label);
+  if (showDegree) parts.push(`${Number(item.degree || 0).toFixed(0)}Deg`);
+  const label = parts.join(" ");
 
-  // Pindahkan titik koordinat (0,0) ke posisi v1
-  ctx.translate(v1.x, v1.y);
+  if (label) {
+    ctx.save(); // Simpan state canvas awal
 
-  // Rotasi canvas berdasarkan item.degree (konversi ke radian)
-  // Pastikan item.degree bernilai 0 jika belum didefinisikan
-  const rotationAngle = (item.degree || 0) * (Math.PI / 180);
-  ctx.rotate(rotationAngle);
+    // Pindahkan titik koordinat (0,0) ke posisi v1
+    ctx.translate(v1.x, v1.y);
 
-  // Tulis teks (posisinya sekarang relatif terhadap v1 yang sudah di-translate & rotate)
-  ctx.fillStyle = "#2f3542";
-  ctx.font = "bold 14px Arial";
-  const label = `${showIdx ? `[${idx}]` : ""}${showLabel ? item.label : ""} ${showDegree ? parseFloat(item.degree).toFixed(0) + "Deg" : ""}`;
-  ctx.fillText(label, 0, -8);
+    // Rotasi canvas berdasarkan item.degree (konversi ke radian)
+    const rotationAngle = ((item.degree ?? 0) * Math.PI) / 180;
+    ctx.rotate(rotationAngle);
 
-  ctx.restore();
+    // Hitung panjang sisi atas (v1 -> v2) sebagai batas lebar maksimum teks di dalam kotak
+    const boxWidth = Math.hypot(v2.x - v1.x, v2.y - v1.y);
+    const padX = 6;
+    const padY = 6;
+    const maxTextWidth = Math.max(20, boxWidth - padX * 2);
+
+    // Tulis teks di dalam box (koordinat y positif agar masuk ke arah v4)
+    ctx.fillStyle = "#2f3542";
+    ctx.font = "bold 14px Arial";
+    ctx.textBaseline = "top";
+    ctx.fillText(label, padX, padY, maxTextWidth);
+
+    ctx.restore();
+  }
 }
 
 export function drawBoundingBoxes(
