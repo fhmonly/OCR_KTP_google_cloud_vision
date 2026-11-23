@@ -9,7 +9,8 @@
     "build": "tsc",
     "prepublishOnly": "pnpm build",
     "visualizer": "vite --config tools/visualizer/vite.config.ts",
-    "typecheck:visualizer": "tsc --noEmit --project tools/visualizer/tsconfig.json"
+    "typecheck:visualizer": "tsc --noEmit --project tools/visualizer/tsconfig.json",
+    "test": "tsx --test"
   },
   "keywords": [],
   "author": "",

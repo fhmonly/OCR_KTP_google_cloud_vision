@@ -1,7 +1,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import visionFixture from "./visionSource/illustration-with-wm.json" with { type: "json" };
+import expectedResult from "../datasets/illustration-with-wm.expected.json" with { type: "json" };
+import visionFixture from "../datasets/illustration-with-wm.json" with { type: "json" };
 
 import type { TransformedTextAnnotation, Vertex } from "../src/types.js";
 
@@ -80,14 +81,19 @@ test("detect and filter diagonal watermark from illustration fixture", () => {
   console.log(wmText + "\n", wmIndexes);
   console.log("=========================");
 
-  // assert.deepEqual(
-  //   detection.watermarkIndexes,
-  //   [16, 58, 59, 60, 61, 62, 63, 64, 65, 66, 67, 68, 69, 73, 74],
-  // );
+  assert.deepEqual(
+    sorted.projected
+      .filter((v) => !detection.watermarkIndexes.includes(v.originalIndex))
+      .map((v) => v.originalIndex),
+    expectedResult.remainingIndexes,
+  );
 
   const filtered = filterWatermarkBoxes(sorted.projected, detection);
 
-  assert.equal(filtered.removedBoxes.length, 15);
+  assert.equal(
+    sorted.flat.length - filtered.removedBoxes.length, // Using sorted because sorted already had feature to remove uncompleted vertices, so better way to compare remaining index is sorted flat minus filtered removed boxes
+    expectedResult.remainingIndexes.length,
+  );
 
   assert.equal(
     filtered.boxes.length + filtered.removedBoxes.length,
