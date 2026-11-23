@@ -7,7 +7,9 @@
   "types": "dist/src/index.d.ts",
   "scripts": {
     "build": "tsc",
-    "prepublishOnly": "pnpm build"
+    "prepublishOnly": "pnpm build",
+    "visualizer": "vite --config tools/visualizer/vite.config.ts",
+    "typecheck:visualizer": "tsc --noEmit --project tools/visualizer/tsconfig.json"
   },
   "keywords": [],
   "author": "",
@@ -16,7 +18,8 @@
   "devDependencies": {
     "@types/node": "^26.6.4",
     "tsx": "^4.23.15",
-    "typescript": "^7.0.2"
+    "typescript": "^7.0.2",
+    "vite": "^8.3.8"
   },
   "dependencies": {
     "@google-cloud/vision": "^6.1.1"
