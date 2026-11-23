@@ -9,6 +9,9 @@ import { filterValidBoundingPoly } from "./filtering/bounding-poly/bounding-poly
 import { filterWatermarkBoxes } from "./filtering/watermark/watermark-filter.js";
 import type { TransformedTextAnnotation } from "./types.js";
 
+import { detectMetadata } from "./filtering/metadata/metadata-detection.js";
+import { filterMetadataBoxes } from "./filtering/metadata/metadata-filter.js";
+
 type ImageAnnotatorClientResponse = Awaited<
   ReturnType<v1.ImageAnnotatorClient["textDetection"]>
 >[number];
@@ -132,12 +135,29 @@ export class KTPExtractor {
       watermarkDetection,
     );
 
-    // STEP 3: Use filtered boxes for association.
-    const boxes = watermarkFiltering.boxes;
+    const metadataDetection = detectMetadata(watermarkFiltering.boxes, {
+      bottomRegionStartRatio: 0.68,
+      rightRegionStartRatio: 0.55,
+      maxPairGapFactor: 6,
+      rowToleranceFactor: 1.5,
+      minRemovalConfidence: 0.8,
+    });
 
-    // Filter rows as well because city fallback uses row data.
-    const removedIndexes = new Set(watermarkFiltering.removedIndexes);
+    const metadataFiltering = filterMetadataBoxes(
+      watermarkFiltering.boxes,
+      metadataDetection,
+    );
 
+    // Box yang diteruskan ke association.
+    const boxes = metadataFiltering.boxes;
+
+    // Gabungkan index yang dihapus oleh watermark dan metadata.
+    const removedIndexes = new Set<number>([
+      ...watermarkFiltering.removedIndexes,
+      ...metadataFiltering.removedIndexes,
+    ]);
+
+    // Filter rows juga karena city fallback menggunakan row data.
     const filteredRows = result.rows
       .map((row) => ({
         ...row,
@@ -192,6 +212,14 @@ export class KTPExtractor {
       },
 
       association: finalAssociation,
+
+      metadata: {
+        detected: metadataDetection.detected,
+        candidateIndexes: metadataDetection.candidateIndexes,
+        removedIndexes: metadataFiltering.removedIndexes,
+        groups: metadataDetection.groups,
+        diagnostics: metadataDetection.diagnostics,
+      },
     };
   }
 
