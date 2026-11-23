@@ -13,7 +13,7 @@ interface VisionAnnotation {
 function transformAnnotations(
   annotations: VisionAnnotation[],
 ): TransformedTextAnnotation[] {
-  return annotations.map((annotation) => {
+  return annotations.map((annotation, index) => {
     const vertices = annotation.boundingPoly?.vertices ?? [];
 
     const [topLeft, topRight, , bottomLeft] = vertices;
@@ -29,6 +29,8 @@ function transformAnnotations(
 
     return {
       label: annotation.description,
+
+      originalIndex: index,
 
       vertices,
 
@@ -105,3 +107,10 @@ if (detection.detected) {
 } else {
   console.log("Watermark not found!");
 }
+
+const wmFree = sorted.projected
+  .filter((v) => !detection.watermarkIndexes.includes(v.originalIndex))
+  .map((box) => box.originalIndex);
+
+console.log("valid Index without watermark");
+console.log(wmFree);
