@@ -145,40 +145,39 @@ function findPlaceBoxes(
     dateBox.height * maxGapFactor,
   );
 
+  const verticalTolerance = typicalHeight * 0.5;
+
   const candidates = boxes
     .filter((box) => {
       if (box.originalIndex === dateBox.originalIndex) return false;
       if (!isPlaceCandidate(box)) return false;
 
-      const sameRow = Math.abs(box.centerV - dateBox.centerV) <= rowTolerance;
+      const centerDistance = Math.abs(box.centerV - dateBox.centerV);
 
-      const gap = dateBox.uMin - box.uMax;
+      const verticalGap = dateBox.vMin - box.vMax;
 
-      return sameRow && gap >= -typicalHeight * 0.5 && gap <= maxGap;
+      // Tempat dapat berada pada baris yang sama
+      // atau tepat di atas tanggal.
+      const sameRow = centerDistance <= rowTolerance;
+
+      const previousRow =
+        box.centerV < dateBox.centerV &&
+        verticalGap >= -verticalTolerance &&
+        verticalGap <= rowTolerance;
+
+      if (!sameRow && !previousRow) return false;
+
+      // Izinkan posisi horizontal overlap dengan tanggal.
+      const horizontalGap = Math.max(
+        0,
+        Math.max(box.uMin - dateBox.uMax, dateBox.uMin - box.uMax),
+      );
+
+      return horizontalGap <= maxGap;
     })
     .sort((a, b) => a.uMin - b.uMin);
 
-  const selected: ProjectedBox[] = [];
-  let boundary = dateBox.uMin;
-
-  // Ambil maksimal 3 box tepat di sebelah kiri tanggal.
-  for (
-    let index = candidates.length - 1;
-    index >= 0 && selected.length < 3;
-    index--
-  ) {
-    const candidate = candidates[index];
-    if (!candidate) continue;
-
-    const gap = boundary - candidate.uMax;
-
-    if (gap > maxGap) break;
-
-    selected.push(candidate);
-    boundary = candidate.uMin;
-  }
-
-  return selected;
+  return candidates;
 }
 
 function getDateMatches(

@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import visionFixture from "../datasets/original.json" with { type: "json" };
+import visionFixture from "../datasets/semirealis-normal.json" with { type: "json" };
 
 import { sortWordBoxes } from "../src/sorting/sort-word-boxes.js";
 import type { TransformedTextAnnotation } from "../src/types.js";
@@ -79,28 +79,36 @@ function createMetadataResult() {
 
   const targetIndexes = new Set([71, 72, 73]);
 
-  console.log(
-    "TARGET METADATA:",
-    sorted.projected
-      .filter((box) => targetIndexes.has(box.originalIndex))
-      .map((box) => ({
-        originalIndex: box.originalIndex,
-        label: box.box.label,
-        centerU: box.centerU,
-        centerV: box.centerV,
-        uMin: box.uMin,
-        uMax: box.uMax,
-        vMin: box.vMin,
-        vMax: box.vMax,
-      })),
-  );
+  // console.log(
+  //   "TARGET METADATA:",
+  //   sorted.projected
+  //     .filter((box) => targetIndexes.has(box.originalIndex))
+  //     .map((box) => ({
+  //       originalIndex: box.originalIndex,
+  //       label: box.box.label,
+  //       centerU: box.centerU,
+  //       centerV: box.centerV,
+  //       uMin: box.uMin,
+  //       uMax: box.uMax,
+  //       vMin: box.vMin,
+  //       vMax: box.vMax,
+  //     })),
+  // );
 
-  console.log("DETECTION:", {
-    candidateIndexes: detection.candidateIndexes,
-    metadataIndexes: detection.metadataIndexes,
-    groups: detection.groups,
-    diagnostics: detection.diagnostics,
-  });
+  // console.log("DETECTION:", {
+  //   candidateIndexes: detection.candidateIndexes,
+  //   metadataIndexes: detection.metadataIndexes,
+  //   groups: detection.groups,
+  //   diagnostics: detection.diagnostics,
+  // });
+
+  const metadataStrings = sorted.projected
+    .filter((v) => detection.metadataIndexes.includes(v.originalIndex))
+    .map((v) => v.box.label)
+    .join(" ");
+
+  console.log("Metadata string");
+  console.log(metadataStrings);
 
   const filtering = filterMetadataBoxes(sorted.projected, detection);
 
