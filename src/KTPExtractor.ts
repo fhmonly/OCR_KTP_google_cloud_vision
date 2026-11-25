@@ -9,6 +9,10 @@ import { filterValidBoundingPoly } from "./filtering/bounding-poly/bounding-poly
 import { filterWatermarkBoxes } from "./filtering/watermark/watermark-filter.js";
 import type { TransformedTextAnnotation } from "./types.js";
 
+import {
+  detectKtpBoundary,
+  filterOutsideKtpBoxes,
+} from "./filtering/ktp-boundary/index.js";
 import { detectMetadata } from "./filtering/metadata/metadata-detection.js";
 import { filterMetadataBoxes } from "./filtering/metadata/metadata-filter.js";
 
@@ -123,13 +127,13 @@ export class KTPExtractor {
       throw new Error("Orientation detection failed");
     }
 
-    // STEP 1: Detect watermark.
+    // STEP 3: Detect watermark hanya pada area KTP.
     const watermarkDetection = detectWatermarks(
       result.projected,
       result.orientation.degree,
     );
 
-    // STEP 2: Filter confirmed watermark boxes.
+    // STEP 4: Filter confirmed watermark boxes.
     const watermarkFiltering = filterWatermarkBoxes(
       result.projected,
       watermarkDetection,
@@ -159,22 +163,41 @@ export class KTPExtractor {
 
       regionOverlapThreshold: 0.5,
     });
+    // STEP 1: Hitung boundary KTP sebelum metadata boxes dihapus.
+    const ktpBoundaryDetection = detectKtpBoundary(
+      watermarkFiltering.boxes,
+      metadataDetection.metadataIndexes,
+    );
 
+    // STEP 2: Hapus metadata boxes dari konten utama.
     const metadataFiltering = filterMetadataBoxes(
       watermarkFiltering.boxes,
       metadataDetection,
     );
 
-    // Box yang diteruskan ke association.
-    const boxes = metadataFiltering.boxes;
+    // STEP 3: Deteksi dan filter outside boxes.
+    const ktpBoundaryFiltering = ktpBoundaryDetection.boundary
+      ? filterOutsideKtpBoxes(
+          metadataFiltering.boxes,
+          ktpBoundaryDetection.boundary,
+          0.5,
+        )
+      : {
+          boxes: metadataFiltering.boxes,
+          outsideBoxes: [],
+          outsideIndexes: [],
+        };
 
-    // Gabungkan index yang dihapus oleh watermark dan metadata.
+    // Box yang diteruskan ke association.
+    const boxes = ktpBoundaryFiltering.boxes;
+
+    // Gabungkan index yang dihapus.
     const removedIndexes = new Set<number>([
       ...watermarkFiltering.removedIndexes,
       ...metadataFiltering.removedIndexes,
+      ...ktpBoundaryFiltering.outsideIndexes,
     ]);
 
-    // Filter rows juga karena city fallback menggunakan row data.
     const filteredRows = result.rows
       .map((row) => ({
         ...row,
@@ -262,6 +285,14 @@ export class KTPExtractor {
         removedIndexes: metadataFiltering.removedIndexes,
         groups: metadataDetection.groups,
         diagnostics: metadataDetection.diagnostics,
+      },
+
+      ktpBoundary: {
+        detected: ktpBoundaryDetection.detected,
+        boundary: ktpBoundaryDetection.boundary,
+        anchorIndexes: ktpBoundaryDetection.anchorIndexes,
+        diagnostics: ktpBoundaryDetection.diagnostics,
+        outsideIndexes: ktpBoundaryFiltering.outsideIndexes,
       },
     };
   }
