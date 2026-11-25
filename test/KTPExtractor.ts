@@ -1,4 +1,4 @@
-import visionFixture from "../datasets/real-90-right.json" with { type: "json" };
+import visionFixture from "../datasets/real-holded-45deg.json" with { type: "json" };
 import { KTPExtractor } from "../src/KTPExtractor";
 
 const { textAnnotations } = visionFixture;
@@ -29,5 +29,20 @@ console.log(
   extraction.watermark.diagnostics
     .filter((v) => v.classification === "watermark")
     .map(({ label, originalIndex }) => `${label}(id:${originalIndex})`)
+    .join("|"),
+);
+
+console.log("======= Outside box ======");
+console.log(
+  "Text Outside box are detected = ",
+  !!extraction.ktpBoundary.outsideIndexes.length,
+);
+console.log("Text Outside box idx = ", extraction.ktpBoundary.outsideIndexes);
+console.log(
+  "Text Outside box text = ",
+  textAnnotations
+    .slice(1, textAnnotations.length)
+    .filter((v, i) => extraction.ktpBoundary.outsideIndexes.includes(i))
+    .map((v) => v.description)
     .join("|"),
 );

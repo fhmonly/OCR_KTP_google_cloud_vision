@@ -1,198 +1,289 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import clockwiseFixture from "../datasets/45-clockwise.json" with { type: "json" };
-import counterClockwiseFixture from "../datasets/45-counter-clockwise.json" with { type: "json" };
-import leftFixture from "../datasets/90-left.json" with { type: "json" };
-import rightFixture from "../datasets/90-right.json" with { type: "json" };
-import illustrationFixture from "../datasets/illustration-with-wm.json" with { type: "json" };
-import ktpRealNormalFixture from "../datasets/ktp-real-normal.json" with { type: "json" };
-import originalFixture from "../datasets/original.json" with { type: "json" };
-import realHolded45Fixture from "../datasets/real-holded-45deg.json" with { type: "json" };
-import upsideDownFixture from "../datasets/upside-down.json" with { type: "json" };
+import type { ProjectedBox } from "../src/types.js";
 
-import { filterValidBoundingPoly } from "../src/filtering/bounding-poly/bounding-poly-filter.js";
-import { detectKtpTextRegion } from "../src/filtering/ktp-region/ktp-region-detection.js";
-import { filterKtpRegionBoxes } from "../src/filtering/ktp-region/ktp-region-filter.js";
-import { sortWordBoxes } from "../src/sorting/sort-word-boxes.js";
+import { detectKtpBoundary } from "../src/filtering/ktp-boundary/ktp-boundary-detection.js";
+import { filterOutsideKtpBoxes } from "../src/filtering/ktp-boundary/ktp-boundary-filter.js";
 
-import type { TransformedTextAnnotation } from "../src/types.js";
+import type { KtpBoundary } from "../src/filtering/ktp-boundary/ktp-boundary-types.js";
 
-const fixtures = [
-  { name: "original", data: originalFixture },
-  { name: "real-holded-45deg", data: realHolded45Fixture },
-  { name: "ktp-real-normal", data: ktpRealNormalFixture },
-  { name: "illustration-with-wm", data: illustrationFixture },
-  { name: "45-clockwise", data: clockwiseFixture },
-  { name: "45-counter-clockwise", data: counterClockwiseFixture },
-  { name: "90-right", data: rightFixture },
-  { name: "90-left", data: leftFixture },
-  { name: "upside-down", data: upsideDownFixture },
-];
-
-function transformAnnotations(
-  annotations: typeof originalFixture.textAnnotations,
-): TransformedTextAnnotation[] {
-  return annotations.slice(1).flatMap((annotation, index) => {
-    const vertices = annotation.boundingPoly?.vertices;
-
-    if (
-      vertices === undefined ||
-      vertices.length !== 4 ||
-      vertices.some(
-        (vertex) =>
-          typeof vertex.x !== "number" || typeof vertex.y !== "number",
-      )
-    ) {
-      return [];
-    }
-
-    const first = vertices[0];
-    const second = vertices[1];
-    const fourth = vertices[3];
-
-    if (
-      first?.x === undefined ||
-      first.y === undefined ||
-      second?.x === undefined ||
-      second.y === undefined ||
-      fourth?.x === undefined ||
-      fourth.y === undefined
-    ) {
-      return [];
-    }
-
-    const width = Math.hypot(second.x - first.x, second.y - first.y);
-
-    const height = Math.hypot(fourth.x - first.x, fourth.y - first.y);
-
-    const degree =
-      (Math.atan2(second.y - first.y, second.x - first.x) * 180) / Math.PI;
-
-    return [
-      {
-        originalIndex: index,
-        label: annotation.description ?? "",
-        vertices: vertices.map((vertex) => ({
-          x: vertex.x ?? 0,
-          y: vertex.y ?? 0,
-        })),
-        dimension: {
-          w: width,
-          h: height,
-        },
-        degree,
-      },
-    ];
-  });
-}
-
-function runKtpRegionDetection(
-  annotations: typeof originalFixture.textAnnotations,
-) {
-  const transformed = transformAnnotations(annotations);
-
-  const boundingPolyResult = filterValidBoundingPoly(transformed);
-
-  const sorted = sortWordBoxes(boundingPolyResult.validBoxes, {
-    degreeTolerance: 8,
-    minClusterSize: 3,
-    minSupportRatio: 0.35,
-    rowToleranceFactor: 0.55,
-    overlapThreshold: 0.3,
-    horizontalSegmentation: {
-      enabled: true,
-      heightFactor: 2.5,
-      madFactor: 3,
-    },
-  });
-
-  if (!sorted) {
-    throw new Error("Orientation detection failed");
-  }
-
-  const detection = detectKtpTextRegion(sorted.projected, {
-    minComponentSize: 8,
-    minSupportRatio: 0.35,
-    maxNeighborDistanceFactor: 8,
-    minOverlapRatio: 0.5,
-  });
-
-  const filtering = filterKtpRegionBoxes(sorted.projected, detection);
-
+function createBox(
+  originalIndex: number,
+  label: string,
+  uMin: number,
+  uMax: number,
+  vMin: number,
+  vMax: number,
+): ProjectedBox {
   return {
-    transformed,
-    sorted,
-    detection,
-    filtering,
+    originalIndex,
+    box: {
+      originalIndex,
+      label,
+      vertices: [],
+      dimension: {
+        w: uMax - uMin,
+        h: vMax - vMin,
+      },
+      degree: 0,
+    },
+    centerU: (uMin + uMax) / 2,
+    centerV: (vMin + vMax) / 2,
+    uMin,
+    uMax,
+    vMin,
+    vMax,
+    width: uMax - uMin,
+    height: vMax - vMin,
   };
 }
 
-// Uji semua fixture JSON.
-for (const fixture of fixtures) {
-  test(`detects KTP region from ${fixture.name}.json`, () => {
-    const result = runKtpRegionDetection(fixture.data.textAnnotations);
+function createDetectionFixture(): ProjectedBox[] {
+  return [
+    createBox(0, "Provinsi", 10, 30, 5, 15),
+    createBox(1, "NIK", 10, 20, 25, 35),
+    createBox(2, "Nama", 15, 30, 40, 50),
+    createBox(3, "Berlaku Hingga", 15, 40, 75, 85),
 
-    assert.equal(
-      result.detection.detected,
-      true,
-      "KTP region should be detected",
-    );
+    // Metadata di bagian kanan.
+    createBox(90, "Made Place", 80, 110, 40, 50),
 
-    assert.ok(
-      result.detection.confidence > 0,
-      "Detection confidence should be greater than zero",
-    );
-
-    assert.ok(
-      result.detection.bounds !== null,
-      "Detected region should have bounds",
-    );
-
-    assert.ok(
-      result.detection.insideIndexes.length > 0,
-      "KTP region should contain boxes",
-    );
-  });
+    // Metadata paling bawah.
+    createBox(91, "Made Date", 80, 105, 90, 100),
+  ];
 }
 
-// Pastikan filtering hanya menghapus box yang diklasifikasikan outside.
-for (const fixture of fixtures) {
-  test(`filters only outside boxes from ${fixture.name}.json`, () => {
-    const result = runKtpRegionDetection(fixture.data.textAnnotations);
+const expectedBoundary: KtpBoundary = {
+  left: 10,
+  right: 110,
+  top: 5,
+  bottom: 100,
+};
 
-    const expectedRemoved = new Set(result.detection.outsideIndexes);
+test("detects KTP boundary using the expected anchors", () => {
+  const boxes = createDetectionFixture();
 
-    assert.deepEqual(
-      [...result.filtering.removedIndexes].sort((a, b) => a - b),
-      [...expectedRemoved].sort((a, b) => a - b),
-    );
+  const result = detectKtpBoundary(boxes, [90, 91]);
 
-    for (const box of result.filtering.boxes) {
-      assert.ok(
-        !expectedRemoved.has(box.originalIndex),
-        `Outside box ${box.originalIndex} should not be retained`,
-      );
-    }
-  });
-}
+  assert.equal(result.detected, true);
+  assert.deepEqual(result.boundary, expectedBoundary);
+});
 
-// Pastikan box partial dan unknown tidak dihapus.
-for (const fixture of fixtures) {
-  test(`preserves partial and unknown boxes from ${fixture.name}.json`, () => {
-    const result = runKtpRegionDetection(fixture.data.textAnnotations);
+test("uses the leftmost recognized label as the left boundary", () => {
+  const boxes = createDetectionFixture();
 
-    console.log(fixture.name + " = " + result.detection.outsideIndexes);
+  boxes.push(createBox(4, "Alamat", 5, 25, 55, 65));
 
-    const retainedIndexes = new Set(
-      result.filtering.boxes.map((box) => box.originalIndex),
-    );
+  const result = detectKtpBoundary(boxes, [90, 91]);
 
-    for (const index of [
-      ...result.detection.partialIndexes,
-      ...result.detection.unknownIndexes,
-    ]) {
-      assert.ok(retainedIndexes.has(index), `Box ${index} should be preserved`);
-    }
-  });
+  assert.equal(result.detected, true);
+  assert.equal(result.boundary?.left, 5);
+});
+
+test("uses the province label as the top boundary", () => {
+  const boxes = createDetectionFixture();
+
+  boxes.push(createBox(5, "Provinsi", 10, 30, 0, 10));
+
+  const result = detectKtpBoundary(boxes, [90, 91]);
+
+  assert.equal(result.detected, true);
+  assert.equal(result.boundary?.top, 0);
+});
+
+test("uses the lowest metadata or valid-until label as the bottom boundary", () => {
+  const boxes = createDetectionFixture();
+
+  const result = detectKtpBoundary(boxes, [90]);
+
+  assert.equal(result.detected, true);
+  assert.equal(result.boundary?.bottom, 50);
+
+  const boxesWithValidUntil = createDetectionFixture();
+
+  const resultWithValidUntil = detectKtpBoundary(boxesWithValidUntil, [90]);
+
+  assert.equal(resultWithValidUntil.detected, true);
+  assert.equal(resultWithValidUntil.boundary?.bottom, 85);
+});
+
+test("returns undetected when no projected boxes are available", () => {
+  const result = detectKtpBoundary([], []);
+
+  assert.equal(result.detected, false);
+  assert.equal(result.boundary, null);
+});
+
+test("returns undetected when province anchor is missing", () => {
+  const boxes = createDetectionFixture().filter(
+    (box) => box.box.label !== "Provinsi",
+  );
+
+  const result = detectKtpBoundary(boxes, [90, 91]);
+
+  assert.equal(result.detected, false);
+  assert.equal(result.boundary, null);
+  assert.ok(
+    result.diagnostics.some((message) =>
+      message.includes("Province label not found"),
+    ),
+  );
+});
+
+test("returns undetected when metadata anchors are missing", () => {
+  const result = detectKtpBoundary(createDetectionFixture(), []);
+
+  assert.equal(result.detected, false);
+  assert.equal(result.boundary, null);
+});
+
+test("returns undetected when boundary dimensions are invalid", () => {
+  const boxes = [
+    createBox(0, "Provinsi", 20, 30, 5, 15),
+    createBox(1, "NIK", 20, 30, 25, 35),
+    createBox(90, "Metadata", 5, 10, 40, 50),
+  ];
+
+  const result = detectKtpBoundary(boxes, [90]);
+
+  assert.equal(result.detected, false);
+  assert.equal(result.boundary, null);
+  assert.ok(
+    result.diagnostics.some((message) =>
+      message.includes("Invalid KTP boundary dimensions"),
+    ),
+  );
+});
+
+test("reports the indexes used by each boundary anchor", () => {
+  const result = detectKtpBoundary(createDetectionFixture(), [90, 91]);
+
+  assert.deepEqual(result.anchorIndexes.label, [0, 1, 2, 3]);
+  assert.deepEqual(result.anchorIndexes.province, [0]);
+  assert.deepEqual(result.anchorIndexes.metadata, [90, 91]);
+  assert.deepEqual(result.anchorIndexes.validUntil, [3]);
+});
+
+// --------------------------------------------------
+// Outside box filtering
+// --------------------------------------------------
+
+test("removes boxes completely outside the KTP boundary", () => {
+  const boxes = [
+    createBox(0, "Inside", 20, 30, 20, 30),
+    createBox(1, "Outside Left", -20, -10, 20, 30),
+    createBox(2, "Outside Right", 120, 130, 20, 30),
+    createBox(3, "Outside Top", 20, 30, -20, -10),
+    createBox(4, "Outside Bottom", 20, 30, 110, 120),
+  ];
+
+  const result = filterOutsideKtpBoxes(boxes, expectedBoundary);
+
+  logFilteredBoxes("OUTSIDE KTP BOXES", result.outsideBoxes);
+
+  assert.deepEqual(
+    result.boxes.map((box) => box.originalIndex),
+    [0],
+  );
+
+  assert.deepEqual(result.outsideIndexes, [1, 2, 3, 4]);
+});
+
+test("preserves boxes that are completely inside the boundary", () => {
+  const boxes = [
+    createBox(0, "A", 20, 30, 20, 30),
+    createBox(1, "B", 40, 50, 40, 50),
+  ];
+
+  const result = filterOutsideKtpBoxes(boxes, expectedBoundary);
+
+  assert.equal(result.boxes.length, 2);
+  assert.equal(result.outsideBoxes.length, 0);
+});
+
+test("preserves partially overlapping boxes that meet the overlap threshold", () => {
+  const boxes = [
+    // 50% dari area box berada di dalam boundary.
+    createBox(0, "Partial", 0, 20, 20, 30),
+  ];
+
+  const result = filterOutsideKtpBoxes(boxes, expectedBoundary, 0.5);
+
+  assert.deepEqual(
+    result.boxes.map((box) => box.originalIndex),
+    [0],
+  );
+  assert.deepEqual(result.outsideIndexes, []);
+});
+
+test("removes partially overlapping boxes below the overlap threshold", () => {
+  const boxes = [
+    // Hanya 25% area box berada di dalam boundary.
+    createBox(0, "Partial", 5, 25, 20, 30),
+  ];
+
+  const result = filterOutsideKtpBoxes(boxes, expectedBoundary, 0.5);
+
+  assert.deepEqual(result.boxes, []);
+  assert.deepEqual(result.outsideIndexes, [0]);
+});
+
+test("preserves the original box order after filtering", () => {
+  const boxes = [
+    createBox(0, "A", 20, 30, 20, 30),
+    createBox(1, "Outside", 120, 130, 20, 30),
+    createBox(2, "B", 40, 50, 40, 50),
+  ];
+
+  const result = filterOutsideKtpBoxes(boxes, expectedBoundary);
+
+  assert.deepEqual(
+    result.boxes.map((box) => box.originalIndex),
+    [0, 2],
+  );
+});
+
+test("removes boxes with invalid dimensions", () => {
+  const boxes = [
+    createBox(0, "Invalid Width", 20, 20, 20, 30),
+    createBox(1, "Invalid Height", 20, 30, 20, 20),
+    createBox(2, "Valid", 30, 40, 30, 40),
+  ];
+
+  const result = filterOutsideKtpBoxes(boxes, expectedBoundary);
+
+  assert.deepEqual(
+    result.boxes.map((box) => box.originalIndex),
+    [2],
+  );
+
+  assert.deepEqual(result.outsideIndexes, [0, 1]);
+});
+
+test("clamps overlap threshold to the range 0–1", () => {
+  const boxes = [
+    createBox(0, "Inside", 20, 30, 20, 30),
+    createBox(1, "Outside", 120, 130, 20, 30),
+  ];
+
+  const result = filterOutsideKtpBoxes(boxes, expectedBoundary, 2);
+
+  assert.deepEqual(result.boxes, []);
+  assert.deepEqual(result.outsideIndexes, [0, 1]);
+});
+
+function logFilteredBoxes(title: string, boxes: ProjectedBox[]): void {
+  console.log(`\n${title}`);
+
+  if (boxes.length === 0) {
+    console.log("Tidak ada box yang terfilter.");
+    return;
+  }
+
+  for (const box of boxes) {
+    console.log(`- Index: ${box.originalIndex} | Text: "${box.box.label}"`);
+  }
+
+  console.log(`Total: ${boxes.length} box terfilter`);
 }
