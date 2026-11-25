@@ -468,3 +468,366 @@ textarea:focus {
     flex-direction: column;
   }
 }
+
+/* ================================================================== */
+/* Diagnostic test                                                    */
+/* ================================================================== */
+
+.muted {
+  color: #7f8ea6;
+}
+
+code {
+  padding: 1px 5px;
+  border-radius: 5px;
+  background: #0b1424;
+  color: #bcd0f5;
+  font:
+    11.5px ui-monospace,
+    monospace;
+}
+
+.field-row {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 10px;
+  margin-top: 9px;
+  color: #9fb0c9;
+  font-size: 11px;
+}
+
+.field-row select,
+.pane-tools select {
+  width: 100%;
+  padding: 7px 8px;
+  border: 1px solid #30405c;
+  border-radius: 8px;
+  outline: 0;
+  background: #0b1424;
+  color: #e6edf8;
+  font-size: 12px;
+}
+
+.diag {
+  margin-top: 16px;
+  min-width: 0;
+}
+
+.diag .panel-title {
+  align-items: flex-start;
+}
+
+.diag .panel-title p {
+  margin: 0;
+  max-width: 720px;
+  color: #91a0b8;
+  font-size: 12px;
+}
+
+.diag-hint {
+  margin-top: 10px;
+  color: #a9b9d4;
+  font-size: 12px;
+}
+
+.diag-status {
+  min-height: 16px;
+  margin-top: 6px;
+  color: #9bb7ed;
+  font-size: 12px;
+}
+
+.diag-status.error {
+  color: #ff8f9c;
+}
+
+.diag-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 14px;
+  margin: 14px 0 12px;
+  padding: 10px 12px;
+  border: 1px solid #26344d;
+  border-radius: 10px;
+  background: #0e1626;
+}
+
+.diag-verdict {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+}
+
+.diag-actions {
+  margin: 0 0 0 auto;
+}
+
+.inline-check {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: #bdc9da;
+  font-size: 12px;
+}
+
+.inline-check input {
+  accent-color: #75a0ff;
+}
+
+/* ---------- Badges ---------- */
+
+.badge {
+  display: inline-block;
+  padding: 3px 9px;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+}
+
+.badge--ok {
+  color: #7ff0b8;
+  background: #123826;
+  border-color: #1f6b47;
+}
+
+.badge--bad {
+  color: #ff9aa8;
+  background: #3b1822;
+  border-color: #8a2b3f;
+}
+
+.badge--warn {
+  color: #ffd27a;
+  background: #3a2c10;
+  border-color: #8a6a1f;
+}
+
+.badge--info {
+  color: #cbb2ff;
+  background: #261c40;
+  border-color: #5b448f;
+}
+
+.badge--muted {
+  color: #93a2bb;
+  background: #17223a;
+  border-color: #2b3a57;
+}
+
+/* ---------- Tabs ---------- */
+
+.tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-bottom: 14px;
+  border-bottom: 1px solid #26344d;
+}
+
+.tab {
+  padding: 9px 14px;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  background: none;
+  color: #8fa0bb;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.tab:hover {
+  color: #dbe6f8;
+}
+
+.tab.active {
+  border-bottom-color: #6e98f2;
+  color: #f1f6ff;
+}
+
+.pane {
+  min-width: 0;
+}
+
+.pane h4 {
+  margin: 18px 0 8px;
+  color: #c6d1e2;
+  font-size: 12px;
+}
+
+.pane h4:first-child {
+  margin-top: 0;
+}
+
+.pane-tools {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.pane-tools select {
+  width: auto;
+  min-width: 170px;
+}
+
+#report-text {
+  min-height: 360px;
+  white-space: pre;
+  overflow: auto;
+  tab-size: 2;
+}
+
+/* ---------- Tables ---------- */
+
+.table-wrap {
+  max-height: 520px;
+  overflow: auto;
+  border: 1px solid #26344d;
+  border-radius: 9px;
+}
+
+.diag-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+
+.diag-table th,
+.diag-table td {
+  padding: 7px 10px;
+  border-bottom: 1px solid #1d2a41;
+  text-align: left;
+  vertical-align: top;
+  overflow-wrap: anywhere;
+}
+
+.diag-table th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: #16223a;
+  color: #aab9d3;
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+.diag-table tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+.diag-table .row-link {
+  cursor: pointer;
+}
+
+.diag-table .row-link:hover td {
+  background: #172540;
+}
+
+/* ---------- Stats / key-values / misc ---------- */
+
+.stat-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: 8px;
+  margin-bottom: 4px;
+}
+
+.stat {
+  display: grid;
+  gap: 3px;
+  padding: 10px;
+  border: 1px solid #293853;
+  border-radius: 8px;
+  background: #0c1525;
+}
+
+.stat b {
+  font-size: 20px;
+  font-variant-numeric: tabular-nums;
+}
+
+.stat small {
+  color: #8392aa;
+  font-size: 10px;
+}
+
+.stat.good b {
+  color: #7ff0b8;
+}
+.stat.bad b {
+  color: #ff9aa8;
+}
+.stat.warn b {
+  color: #ffd27a;
+}
+.stat.info b {
+  color: #cbb2ff;
+}
+
+.kv {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  gap: 6px 16px;
+  margin: 0 0 10px;
+  font-size: 12px;
+}
+
+.kv dt {
+  color: #8fa0bb;
+}
+
+.kv dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.callout {
+  margin-bottom: 14px;
+  padding: 12px 14px;
+  border: 1px solid #26344d;
+  border-radius: 9px;
+  font-size: 12px;
+}
+
+.callout--bad {
+  border-color: #8a2b3f;
+  background: #2a1520;
+  color: #ffb3bd;
+}
+
+.diag pre {
+  max-height: 320px;
+  margin: 8px 0 0;
+  padding: 10px 12px;
+  overflow: auto;
+  border: 1px solid #26344d;
+  border-radius: 8px;
+  background: #0b1424;
+  color: #cfdcf3;
+  font:
+    11.5px/1.5 ui-monospace,
+    monospace;
+}
+
+.diag details {
+  margin-top: 10px;
+}
+
+.diag summary {
+  cursor: pointer;
+  color: #9db9ee;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+@media (max-width: 680px) {
+  .diag-actions {
+    margin-left: 0;
+  }
+}

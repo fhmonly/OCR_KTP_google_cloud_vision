@@ -1,4 +1,10 @@
 import "./style.css";
+import {
+  initDiagnosticUi,
+  type DiagnosticUi,
+  type MarkKind,
+} from "./diagnostic-ui.js";
+import type { ExpectedCategory, ExpectedEntry } from "./diagnostic/types.js";
 
 /* ------------------------------------------------------------------ */
 /* Types                                                              */
@@ -92,6 +98,7 @@ const zoomResetButton = $<HTMLButtonElement>("zoom-reset");
 const zoomLevelNode = $("zoom-level");
 
 const removeInput = $<HTMLTextAreaElement>("remove-input");
+const removeCategory = $<HTMLSelectElement>("remove-category");
 const restoreInput = $<HTMLTextAreaElement>("restore-input");
 const removeButton = $<HTMLButtonElement>("remove");
 const restoreButton = $<HTMLButtonElement>("restore");
@@ -116,7 +123,11 @@ const removedCountNode = $("removed-count");
 /* ------------------------------------------------------------------ */
 
 let boxes: Box[] = [];
-const removed = new Set<number>();
+// Seluruh textAnnotations mentah (termasuk index 0), dikirim apa adanya ke test runner.
+let rawAnnotations: Annotation[] = [];
+// index -> kategori detektor yang diharapkan menghapusnya.
+const removed = new Map<number, ExpectedCategory>();
+let diagnostic: DiagnosticUi | null = null;
 let selected: number | null = null;
 let sourceName = "";
 let background: HTMLImageElement | null = null;
@@ -190,7 +201,18 @@ function remainingIndexes(): number[] {
 }
 
 function removedIndexes(): number[] {
-  return [...removed].sort((a, b) => a - b);
+  return [...removed.keys()].sort((a, b) => a - b);
+}
+
+function expectedEntries(): ExpectedEntry[] {
+  return removedIndexes().map((index) => ({
+    index,
+    category: removed.get(index) ?? "unspecified",
+  }));
+}
+
+function expectedChanged(): void {
+  diagnostic?.onExpectedChanged();
 }
 
 /* ------------------------------------------------------------------ */
@@ -212,6 +234,53 @@ function computeView(width: number, height: number, size: Point): View {
     baseX,
     baseY,
   };
+}
+
+const MARK_STYLE: Record<
+  MarkKind,
+  { color: string; dash: boolean; tag: string }
+> = {
+  // Diharapkan hilang tetapi tidak dihapus pipeline.
+  missing: { color: "#ff5d73", dash: true, tag: "MISSING" },
+  // Dihapus pipeline padahal tidak diharapkan.
+  unexpected: { color: "#ffb020", dash: false, tag: "EXTRA" },
+  // Dihapus oleh detektor yang berbeda dari yang diharapkan.
+  "wrong-source": { color: "#b388ff", dash: true, tag: "WRONG SRC" },
+};
+
+function drawMark(box: Box, kind: MarkKind, scale: number): void {
+  const first = box.vertices[0];
+  if (!first || box.vertices.length < 3) return;
+  const style = MARK_STYLE[kind];
+
+  ctx.save();
+  ctx.beginPath();
+  ctx.moveTo(first.x, first.y);
+  for (const point of box.vertices.slice(1)) ctx.lineTo(point.x, point.y);
+  ctx.closePath();
+  ctx.fillStyle = `${style.color}33`;
+  ctx.fill();
+  ctx.lineJoin = "round";
+  ctx.lineWidth = 3 / scale;
+  ctx.strokeStyle = style.color;
+  ctx.setLineDash(style.dash ? [6 / scale, 4 / scale] : []);
+  ctx.stroke();
+  ctx.setLineDash([]);
+
+  const fontSize = HEADER_FONT_PX / scale;
+  const text = `${style.tag} #${box.originalIndex}`;
+  ctx.translate(first.x, first.y);
+  ctx.rotate((box.degree * Math.PI) / 180);
+  ctx.font = `800 ${fontSize}px ui-monospace, monospace`;
+  ctx.textAlign = "left";
+  ctx.textBaseline = "middle";
+  const height = fontSize * 1.5;
+  const y = -(height + 3 / scale);
+  ctx.fillStyle = style.color;
+  ctx.fillRect(0, y, ctx.measureText(text).width + 10 / scale, height);
+  ctx.fillStyle = "#0b1020";
+  ctx.fillText(text, 5 / scale, y + height / 2);
+  ctx.restore();
 }
 
 function drawBox(box: Box, scale: number): void {
@@ -363,6 +432,15 @@ function render(): void {
     if (removed.has(box.originalIndex) || box.vertices.length < 3) continue;
     drawBox(box, view.scale);
   }
+  // Hasil diagnostic test: sorot box yang tidak cocok dengan expected,
+  // termasuk yang sedang disembunyikan karena ditandai removed.
+  const marks = diagnostic?.getMarks();
+  if (marks) {
+    for (const [index, kind] of marks) {
+      const box = boxes[index];
+      if (box) drawMark(box, kind, view.scale);
+    }
+  }
   ctx.restore();
 
   updatePanels();
@@ -392,12 +470,17 @@ function updateSelectedPanel(): void {
     selectedOutput.textContent = DEFAULT_SELECTED_TEXT;
     return;
   }
+  const category = removed.get(box.originalIndex);
+  const testLines = (diagnostic?.describeIndex(box.originalIndex) ?? []).map(
+    (line) => escapeHtml(line),
+  );
   selectedOutput.innerHTML = [
     `<strong>Index:</strong> ${box.originalIndex}`,
     `<strong>Label:</strong> ${escapeHtml(box.label || "(empty)")}`,
     `<strong>Degree:</strong> ${box.degree.toFixed(4)}°`,
     `<strong>Vertices:</strong> ${box.vertices.length}`,
-    `<strong>Status:</strong> ${removed.has(box.originalIndex) ? "Removed" : "Visible"}`,
+    `<strong>Status:</strong> ${category ? `Removed (${category})` : "Visible"}`,
+    ...testLines,
   ].join("<br>");
 }
 
@@ -458,13 +541,14 @@ function removeIndexes(): void {
   const targets = parsed.values.filter((index) => known.has(index));
   const missing = parsed.values.filter((index) => !known.has(index));
 
-  for (const index of targets) removed.add(index);
-  if (selected !== null && removed.has(selected)) selected = null;
+  const category = removeCategory.value as ExpectedCategory;
+  for (const index of targets) removed.set(index, category);
 
   notify(
-    `${targets.length} index(es) marked as removed.` +
+    `${targets.length} index(es) marked as removed (${category}).` +
       (missing.length ? ` Not found: ${missing.join(", ")}` : ""),
   );
+  expectedChanged();
   render();
 }
 
@@ -477,6 +561,7 @@ function restoreIndexes(): void {
   let count = 0;
   for (const index of parsed.values) if (removed.delete(index)) count++;
   notify(`${count} index(es) restored.`);
+  expectedChanged();
   render();
 }
 
@@ -484,6 +569,7 @@ function restoreAll(): void {
   const count = removed.size;
   removed.clear();
   notify(`${count} index(es) restored.`);
+  expectedChanged();
   render();
 }
 
@@ -545,18 +631,16 @@ async function loadJson(file: File): Promise<void> {
   if (!Array.isArray(annotations))
     throw new Error("textAnnotations must be an array.");
 
-  boxes = transform(annotations);
+  rawAnnotations = annotations as Annotation[];
+  boxes = transform(rawAnnotations);
   removed.clear();
   selected = null;
   sourceName = file.name;
   datasetName.textContent = file.name;
   removeInput.value = "";
   restoreInput.value = "";
-  removeInput.value = "";
-  restoreInput.value = "";
   resetViewState();
-  notify(`Loaded ${boxes.length} annotations.`);
-  render();
+  diagnostic?.onDatasetChanged();
   notify(`Loaded ${boxes.length} annotations.`);
   render();
 }
@@ -587,6 +671,10 @@ function clearBackground(): void {
   render();
 }
 
+function indexesOfCategory(category: ExpectedCategory): number[] {
+  return removedIndexes().filter((index) => removed.get(index) === category);
+}
+
 function exportExpected(): void {
   const payload = {
     schemaVersion: 1,
@@ -594,6 +682,12 @@ function exportExpected(): void {
     totalAnnotations: boxes.length,
     removedIndexes: removedIndexes(),
     remainingIndexes: remainingIndexes(),
+    // Tambahan opsional: detektor mana yang diharapkan menghapus index tsb.
+    removedByCategory: {
+      watermark: indexesOfCategory("watermark"),
+      metadata: indexesOfCategory("metadata"),
+      unspecified: indexesOfCategory("unspecified"),
+    },
   };
   const blob = new Blob([JSON.stringify(payload, null, 2)], {
     type: "application/json",
@@ -804,5 +898,52 @@ canvas.addEventListener("pointermove", moveDrag);
 canvas.addEventListener("pointerup", endDrag);
 canvas.addEventListener("pointercancel", endDrag);
 window.addEventListener("resize", render);
+
+diagnostic = initDiagnosticUi({
+  getDataset: () =>
+    boxes.length > 0
+      ? {
+          sourceName,
+          textAnnotations: rawAnnotations,
+          total: boxes.length,
+        }
+      : null,
+  getExpected: expectedEntries,
+  applyExpected(entries, totalAnnotations) {
+    if (boxes.length === 0) {
+      notify("Load a Vision JSON before loading expected JSON.", true);
+      return;
+    }
+    const known = new Set(boxes.map((box) => box.originalIndex));
+    removed.clear();
+    const unknown: number[] = [];
+    for (const entry of entries) {
+      if (known.has(entry.index)) removed.set(entry.index, entry.category);
+      else unknown.push(entry.index);
+    }
+    selected = null;
+    const warnings: string[] = [];
+    if (unknown.length) warnings.push(`unknown indexes ignored: ${unknown.join(", ")}`);
+    if (totalAnnotations !== null && totalAnnotations !== boxes.length) {
+      warnings.push(
+        `expected file is for ${totalAnnotations} annotations but this dataset has ${boxes.length}`,
+      );
+    }
+    notify(
+      `Loaded expected: ${removed.size} removed index(es).` +
+        (warnings.length ? ` Warning: ${warnings.join("; ")}.` : ""),
+      warnings.length > 0,
+    );
+    expectedChanged();
+    render();
+  },
+  selectIndex(index) {
+    if (!boxes.some((box) => box.originalIndex === index)) return;
+    selected = index;
+    render();
+  },
+  requestRender: render,
+  notify,
+});
 
 render();

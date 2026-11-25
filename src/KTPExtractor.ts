@@ -203,6 +203,32 @@ export class KTPExtractor {
     return {
       data,
 
+      // Diagnostik tambahan (dipakai tools/visualizer). Hanya menambah field,
+      // tidak mengubah field yang sudah ada.
+      boundingPoly: {
+        invalidIndexes: boundingPolyResult.invalidIndexes,
+        diagnostics: boundingPolyResult.diagnostics.filter((d) => !d.valid),
+      },
+
+      orientation: {
+        degree: result.orientation.degree,
+        totalWords: result.orientation.totalWords,
+        validWords: result.orientation.validWords,
+        support: result.orientation.support,
+        supportRatio: result.orientation.supportRatio,
+        medianHeight: result.orientation.medianHeight,
+        deviation: result.orientation.deviation,
+        isReliable: result.orientation.isReliable,
+        clusters: result.orientation.clusters.map((c) => ({
+          degree: c.degree,
+          count: c.count,
+          supportRatio: c.supportRatio,
+          deviation: c.deviation,
+        })),
+        skippedProjection: result.skipped,
+        rowCount: result.rows.length,
+      },
+
       watermark: {
         detected: watermarkDetection.detected,
         confidence: watermarkDetection.confidence,

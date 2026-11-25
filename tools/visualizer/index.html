@@ -111,13 +111,24 @@
 
         <aside>
           <section class="panel">
-            <h2>Remove indexes</h2>
-            <p>Separate indexes with commas, spaces, or new lines.</p>
+            <h2>Expected removed indexes</h2>
+            <p>
+              Boxes that should disappear after watermark / metadata
+              detection. Separate indexes with commas, spaces, or new lines.
+            </p>
             <textarea
               id="remove-input"
               rows="3"
               placeholder="Example: 16, 58, 66, 72"
             ></textarea>
+            <label class="field-row" for="remove-category">
+              <span>Removed by</span>
+              <select id="remove-category">
+                <option value="unspecified">Not specified</option>
+                <option value="watermark">Watermark detection</option>
+                <option value="metadata">Metadata detection</option>
+              </select>
+            </label>
             <div class="actions">
               <button id="remove" class="button primary" disabled>
                 Remove
@@ -173,6 +184,95 @@
           </section>
         </aside>
       </main>
+
+      <section class="panel diag" id="diag">
+        <div class="panel-title">
+          <div>
+            <h2>Diagnostic test</h2>
+            <p>
+              Runs the real <code>KTPExtractor</code> on the loaded JSON and
+              compares the boxes it removes against the expected indexes
+              above.
+            </p>
+          </div>
+          <div class="actions">
+            <label class="button secondary" for="expected-file"
+              >Load expected JSON</label
+            >
+            <input id="expected-file" type="file" accept=".json,application/json" />
+            <button id="run-test" class="button primary" disabled>
+              Run test
+            </button>
+          </div>
+        </div>
+        <div id="diag-hint" class="diag-hint"></div>
+        <div id="diag-status" class="diag-status" role="status"></div>
+
+        <div id="diag-result" hidden>
+          <div class="diag-bar">
+            <div id="diag-verdict" class="diag-verdict"></div>
+            <span id="diag-stale" class="badge badge--warn" hidden
+              >Expected changed since this run — run again</span
+            >
+            <div class="actions diag-actions">
+              <label class="inline-check"
+                ><input id="show-test-overlay" type="checkbox" checked />
+                Highlight on canvas</label
+              >
+              <button id="copy-md" class="button primary small">
+                Copy diagnostic (Markdown)
+              </button>
+              <button id="copy-json" class="button secondary small">
+                Copy JSON
+              </button>
+              <button id="download-md" class="button secondary small">
+                Download .md
+              </button>
+              <button id="download-json" class="button secondary small">
+                Download .json
+              </button>
+            </div>
+          </div>
+
+          <nav class="tabs" role="tablist">
+            <button class="tab active" data-tab="summary">Summary</button>
+            <button class="tab" data-tab="extraction">Extraction</button>
+            <button class="tab" data-tab="pipeline">Pipeline</button>
+            <button class="tab" data-tab="boxes">All boxes</button>
+            <button class="tab" data-tab="report">Full report (copy)</button>
+          </nav>
+
+          <div id="pane-summary" class="pane"></div>
+          <div id="pane-extraction" class="pane" hidden></div>
+          <div id="pane-pipeline" class="pane" hidden></div>
+          <div id="pane-boxes" class="pane" hidden>
+            <div class="pane-tools">
+              <label class="inline-check" for="box-filter">Show</label>
+              <select id="box-filter">
+                <option value="all">All boxes</option>
+                <option value="mismatch">Mismatches only</option>
+                <option value="removed">Actually removed</option>
+                <option value="expected">Expected removed</option>
+                <option value="detector">With detector info</option>
+              </select>
+              <small class="muted">Click a row to select that box on the canvas.</small>
+            </div>
+            <div id="boxes-table"></div>
+          </div>
+          <div id="pane-report" class="pane" hidden>
+            <div class="pane-tools">
+              <button id="copy-md-inline" class="button primary small">
+                Copy all
+              </button>
+              <small class="muted"
+                >Complete Markdown report, ready to paste into an AI
+                chat.</small
+              >
+            </div>
+            <textarea id="report-text" rows="24" readonly spellcheck="false"></textarea>
+          </div>
+        </div>
+      </section>
     </div>
     <script type="module" src="/main.ts"></script>
   </body>
