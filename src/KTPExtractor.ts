@@ -141,6 +141,23 @@ export class KTPExtractor {
       maxPairGapFactor: 6,
       rowToleranceFactor: 1.5,
       minRemovalConfidence: 0.8,
+
+      metadataRegion: {
+        uStartRatio: 0.68,
+        uEndRatio: 1,
+        vStartRatio: 0.68,
+        vEndRatio: 1,
+      },
+
+      signatureRegion: {
+        id: "signature-area",
+        uStartRatio: 0.55,
+        uEndRatio: 1,
+        vStartRatio: 0.82,
+        vEndRatio: 1,
+      },
+
+      regionOverlapThreshold: 0.5,
     });
 
     const metadataFiltering = filterMetadataBoxes(

@@ -77,12 +77,6 @@ export async function runDiagnostic(
 ): Promise<DiagnosticReport> {
   const { repoRoot } = options;
 
-  // Label per index, sama dengan konvensi extractor: slice(1).
-  const labels = request.textAnnotations.slice(1).map((item) => {
-    const description = (item as { description?: unknown } | null)?.description;
-    return typeof description === "string" ? description.trim() : "";
-  });
-
   const started = performance.now();
   let output: ExtractorOutputLike | null = null;
   let error: unknown = null;
@@ -101,7 +95,7 @@ export async function runDiagnostic(
 
   return buildReport({
     sourceName: request.sourceName,
-    labels,
+    textAnnotations: request.textAnnotations,
     expected: request.expected,
     output,
     error,

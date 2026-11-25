@@ -33,6 +33,10 @@ Open `http://127.0.0.1:4173` if the browser does not open automatically.
 4. **Read the result**
    - **Summary** — PASS / FAIL, expected vs actual, precision / recall and a
      mismatch table (click a row to select that box on the canvas).
+   - **Removed detail** — two tables, *Expected removed* and *Actual removed*,
+     with per-box geometry: degree (v0>v1 and normalised), bottom-edge degree,
+     center, width x height, area, axis-aligned bbox and all vertices, plus the
+     detector confidence/reason for actual removals.
    - **Extraction** — extracted data, field association, unmatched labels,
      candidate scoring.
    - **Pipeline** — bounding-poly filter, orientation, watermark and metadata
@@ -97,6 +101,7 @@ tools/visualizer/
   diagnostic-ui.ts         Run test button, result tabs, copy/download
   diagnostic/types.ts      shared report types
   diagnostic/compare.ts    expected vs actual + report builder (pure)
+  diagnostic/geometry.ts   per-box degree / center / bbox / vertices (pure)
   diagnostic/format.ts     Markdown / JSON formatter (pure)
   server/run-diagnostic.ts loads and runs the real KTPExtractor (Node)
   server/diagnostic-plugin.ts  Vite dev-server endpoints /__diagnostic/*

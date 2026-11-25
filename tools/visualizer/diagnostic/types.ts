@@ -21,11 +21,46 @@ export interface DiagnosticRequest {
   expected: ExpectedEntry[];
 }
 
+export interface Point {
+  x: number;
+  y: number;
+}
+
+/** Geometri box dari boundingPoly. Nilai x/y yang hilang dibaca 0 (perilaku Vision). */
+export interface BoxGeometry {
+  vertices: Point[];
+  vertexCount: number;
+  /** true bila ada vertex yang tidak punya x atau y di JSON asli. */
+  hadMissingCoordinates: boolean;
+  /** Sudut v0 -> v1 (-180..180), sama dengan degree di canvas. */
+  degree: number | null;
+  /** degree dinormalisasi ke 0..360. */
+  degreeNormalized: number | null;
+  /** Sudut v3 -> v2; bila beda jauh dari degree, box miring/skew. */
+  bottomEdgeDegree: number | null;
+  center: Point | null;
+  /** Rata-rata panjang sisi atas dan bawah. */
+  width: number | null;
+  /** Rata-rata panjang sisi kiri dan kanan. */
+  height: number | null;
+  /** Bounding box sejajar sumbu (axis-aligned). */
+  bbox: {
+    minX: number;
+    minY: number;
+    maxX: number;
+    maxY: number;
+    width: number;
+    height: number;
+  } | null;
+  area: number | null;
+}
+
 export type ItemVerdict = "ok" | "missing" | "unexpected" | "wrong-source";
 
 export interface BoxDiagnostic {
   index: number;
   label: string;
+  geometry: BoxGeometry;
   expected: ExpectedCategory | null;
   actual: RemovalSource | null;
   /** "kept" = tidak diharapkan hilang dan memang tidak dihapus. */

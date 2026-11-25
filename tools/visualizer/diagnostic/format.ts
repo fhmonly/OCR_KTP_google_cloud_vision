@@ -1,4 +1,5 @@
-import type { DiagnosticReport } from "./types.js";
+import { formatVertices } from "./geometry.js";
+import type { BoxDiagnostic, DiagnosticReport } from "./types.js";
 
 /* Pemformat teks laporan. Murni (tanpa DOM/Node) supaya mudah dites. */
 
@@ -26,6 +27,65 @@ const fixed = (value: number | null | undefined, digits = 3): string =>
   typeof value === "number" && Number.isFinite(value)
     ? value.toFixed(digits)
     : "-";
+
+const degreeText = (b: BoxDiagnostic): string =>
+  b.geometry.degree === null
+    ? "-"
+    : `${fixed(b.geometry.degree, 2)} (${fixed(b.geometry.degreeNormalized, 2)} norm)`;
+
+const centerText = (b: BoxDiagnostic): string =>
+  b.geometry.center ? `(${b.geometry.center.x}, ${b.geometry.center.y})` : "-";
+
+const sizeText = (b: BoxDiagnostic): string =>
+  b.geometry.width === null
+    ? "-"
+    : `${fixed(b.geometry.width, 1)} x ${fixed(b.geometry.height, 1)}`;
+
+const bboxText = (b: BoxDiagnostic): string => {
+  const box = b.geometry.bbox;
+  return box
+    ? `(${box.minX},${box.minY})-(${box.maxX},${box.maxY}) ${box.width}x${box.height}`
+    : "-";
+};
+
+const verticesText = (b: BoxDiagnostic): string =>
+  formatVertices(b.geometry.vertices) +
+  (b.geometry.hadMissingCoordinates ? " [missing x/y read as 0]" : "");
+
+const detectorText = (b: BoxDiagnostic): string =>
+  [
+    b.watermark
+      ? `watermark: ${b.watermark.classification} conf=${fixed(b.watermark.confidence)} angle=${fixed(b.watermark.relativeAngle, 1)} group=${b.watermark.groupId ?? "-"} (${b.watermark.reason})`
+      : null,
+    b.metadata
+      ? `metadata: ${b.metadata.classification}/${b.metadata.type} conf=${fixed(b.metadata.confidence)} group=${b.metadata.groupId ?? "-"} (${b.metadata.reason})`
+      : null,
+    b.boundingPolyReasons.length
+      ? `bounding-poly: ${b.boundingPolyReasons.join(", ")}`
+      : null,
+  ]
+    .filter(Boolean)
+    .join("; ");
+
+const GEOMETRY_HEADERS = [
+  "Degree v0>v1",
+  "Bottom edge v3>v2",
+  "Center",
+  "Size WxH",
+  "Area",
+  "BBox",
+  "Vertices (v0..)",
+];
+
+const geometryCells = (b: BoxDiagnostic): unknown[] => [
+  degreeText(b),
+  b.geometry.bottomEdgeDegree === null ? null : fixed(b.geometry.bottomEdgeDegree, 2),
+  centerText(b),
+  sizeText(b),
+  b.geometry.area,
+  bboxText(b),
+  verticesText(b),
+];
 
 export const STATUS_LABEL: Record<DiagnosticReport["status"], string> = {
   pass: "PASS",
@@ -206,18 +266,81 @@ export function formatMarkdown(report: DiagnosticReport): string {
     out.push("");
   }
 
-  /* ---- 4. Extraction ---- */
-  out.push("## 4. Extraction result");
+  /* ---- 4. Expected removed: box details ---- */
+  const expectedBoxes = report.boxes.filter((b) => b.expected !== null);
+  out.push("## 4. Expected removed — box details");
+  out.push("");
+  out.push(
+    "Geometry comes from `boundingPoly.vertices` (v0 top-left, v1 top-right, v2 bottom-right, v3 bottom-left in the text frame). " +
+      "Degree = angle of v0>v1 in degrees (-180..180, y axis points down), identical to the visualizer. Missing x/y in the JSON are read as 0.",
+  );
+  out.push("");
+  out.push(
+    mdTable(
+      [
+        "#",
+        "Label",
+        "Expected",
+        "Actually",
+        "Verdict",
+        ...GEOMETRY_HEADERS,
+      ],
+      expectedBoxes.map((b) => [
+        b.index,
+        b.label,
+        b.expected,
+        b.actual ? `removed by ${b.actual}` : report.comparison ? "kept" : "unknown",
+        b.verdict,
+        ...geometryCells(b),
+      ]),
+    ),
+  );
+  out.push("");
+
+  /* ---- 5. Actual removed: box details ---- */
+  const actualBoxes = report.boxes.filter((b) => b.actual !== null);
+  out.push("## 5. Actual removed — box details");
+  out.push("");
+  if (report.comparison) {
+    out.push(
+      mdTable(
+        [
+          "#",
+          "Label",
+          "Removed by",
+          "Expected",
+          "Verdict",
+          ...GEOMETRY_HEADERS,
+          "Detector info",
+        ],
+        actualBoxes.map((b) => [
+          b.index,
+          b.label,
+          b.actual,
+          b.expected ?? "not expected",
+          b.verdict,
+          ...geometryCells(b),
+          detectorText(b),
+        ]),
+      ),
+    );
+  } else {
+    out.push("_Extraction did not complete, so the actual removal is unknown._");
+  }
+  out.push("");
+
+  /* ---- 6. Extraction ---- */
+  out.push("## 6. Extraction result");
   out.push("");
   if (report.extraction) {
     const ex = report.extraction;
-    out.push("### 4.1 Data");
+    out.push("### 6.1 Data");
     out.push("");
     out.push("```json");
     out.push(JSON.stringify(ex.data, null, 2));
     out.push("```");
     out.push("");
-    out.push("### 4.2 Field association");
+    out.push("### 6.2 Field association");
     out.push("");
     out.push(
       mdTable(
@@ -233,7 +356,7 @@ export function formatMarkdown(report: DiagnosticReport): string {
       ),
     );
     out.push("");
-    out.push("### 4.3 Unmatched labels");
+    out.push("### 6.3 Unmatched labels");
     out.push("");
     out.push(
       mdTable(
@@ -250,7 +373,7 @@ export function formatMarkdown(report: DiagnosticReport): string {
     out.push("");
     out.push(`Used word indexes (${ex.usedWordIndexes.length}): ${list(ex.usedWordIndexes)}`);
     out.push("");
-    out.push("### 4.4 Association diagnostics (candidates)");
+    out.push("### 6.4 Association diagnostics (candidates)");
     out.push("");
     out.push(
       mdTable(
@@ -273,11 +396,11 @@ export function formatMarkdown(report: DiagnosticReport): string {
   }
 
   /* ---- 5. Pipeline ---- */
-  out.push("## 5. Pipeline");
+  out.push("## 7. Pipeline");
   out.push("");
   const p = report.pipeline;
 
-  out.push("### 5.1 Bounding poly filter");
+  out.push("### 7.1 Bounding poly filter");
   out.push("");
   if (p.boundingPoly) {
     out.push(`Invalid indexes: ${list(p.boundingPoly.invalidIndexes)}`);
@@ -290,7 +413,7 @@ export function formatMarkdown(report: DiagnosticReport): string {
   } else out.push("_Not reported by this extractor version._");
   out.push("");
 
-  out.push("### 5.2 Orientation");
+  out.push("### 7.2 Orientation");
   out.push("");
   if (p.orientation) {
     const o = p.orientation;
@@ -325,8 +448,8 @@ export function formatMarkdown(report: DiagnosticReport): string {
   out.push("");
 
   for (const [title, key] of [
-    ["5.3 Watermark detection", "watermark"],
-    ["5.4 Metadata detection", "metadata"],
+    ["7.3 Watermark detection", "watermark"],
+    ["7.4 Metadata detection", "metadata"],
   ] as const) {
     out.push(`### ${title}`);
     out.push("");
@@ -353,13 +476,19 @@ export function formatMarkdown(report: DiagnosticReport): string {
   }
 
   /* ---- 6. Per box ---- */
-  out.push("## 6. All boxes");
+  out.push("## 8. All boxes");
+  out.push("");
+  out.push(
+    "Full vertices of every box are in the JSON export (`boxes[].geometry`).",
+  );
   out.push("");
   out.push(
     mdTable(
       [
         "#",
         "Label",
+        "Degree",
+        "Center",
         "Expected",
         "Actual",
         "Verdict",
@@ -373,6 +502,8 @@ export function formatMarkdown(report: DiagnosticReport): string {
       report.boxes.map((b) => [
         b.index,
         b.label,
+        b.geometry.degree === null ? null : fixed(b.geometry.degree, 2),
+        centerText(b),
         b.expected,
         b.actual,
         b.verdict,

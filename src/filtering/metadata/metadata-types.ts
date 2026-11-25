@@ -4,7 +4,25 @@ export type MetadataType =
   | "place-made"
   | "date-made"
   | "place-date"
-  | "signature-marker";
+  | "signature-marker"
+  | "signature"
+  | "other";
+
+export type MetadataClassification = "metadata-candidate" | "metadata";
+
+export interface MetadataRegionConfig {
+  /** ID region untuk diagnostic. */
+  id?: string;
+
+  /**
+   * Rasio region terhadap projected bounds seluruh box.
+   * Nilai harus berada dalam rentang 0–1.
+   */
+  uStartRatio: number;
+  uEndRatio: number;
+  vStartRatio: number;
+  vEndRatio: number;
+}
 
 export interface MetadataDetectionOptions {
   /** Area bawah dokumen yang dipertimbangkan (0–1). */
@@ -19,8 +37,17 @@ export interface MetadataDetectionOptions {
   /** Toleransi perbedaan centerV antarbox. */
   rowToleranceFactor?: number;
 
-  /** Confidence minimum agar box dihapus oleh filter. */
+  /** Confidence minimum untuk deteksi metadata lama. */
   minRemovalConfidence?: number;
+
+  /** Region utama metadata. */
+  metadataRegion?: MetadataRegionConfig;
+
+  /** Sub-region tanda tangan, relatif terhadap projected bounds. */
+  signatureRegion?: MetadataRegionConfig;
+
+  /** Minimum overlap box dengan metadata region agar dihapus. */
+  regionOverlapThreshold?: number;
 }
 
 export interface MetadataGroup {
@@ -36,9 +63,11 @@ export interface MetadataBoxDiagnostic {
   originalIndex: number;
   label: string;
   type: MetadataType;
-  classification: "metadata-candidate" | "metadata";
+  classification: MetadataClassification;
   confidence: number;
   groupId?: number;
+  regionId?: string;
+  overlapRatio?: number;
   reason: string;
 }
 

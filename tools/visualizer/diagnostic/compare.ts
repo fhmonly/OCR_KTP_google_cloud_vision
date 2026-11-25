@@ -12,6 +12,7 @@ import type {
   RemovalSource,
   UnmatchedLabelReport,
 } from "./types.js";
+import { computeGeometry } from "./geometry.js";
 
 /* ------------------------------------------------------------------ */
 /* Bentuk longgar dari output KTPExtractor                            */
@@ -89,8 +90,8 @@ export interface ExtractorOutputLike {
 
 export interface BuildReportInput {
   sourceName: string;
-  /** Label setiap word, urut sesuai index (textAnnotations.slice(1)). */
-  labels: string[];
+  /** Seluruh textAnnotations (termasuk index 0); index box = posisi pada slice(1). */
+  textAnnotations: unknown[];
   expected: ExpectedEntry[];
   output: ExtractorOutputLike | null;
   error: unknown;
@@ -226,6 +227,11 @@ function errorInfo(error: unknown): { message: string; stack: string | null } {
 
 export function buildReport(input: BuildReportInput): DiagnosticReport {
   const { output, expected } = input;
+  const annotations = input.textAnnotations.slice(1);
+  const labels = annotations.map((item) => {
+    const description = (item as { description?: unknown } | null)?.description;
+    return typeof description === "string" ? description.trim() : "";
+  });
   const categories = groupExpected(expected);
   const expectedByIndex = new Map(
     expected.map((entry) => [entry.index, entry.category]),
@@ -298,7 +304,7 @@ export function buildReport(input: BuildReportInput): DiagnosticReport {
     }
   }
 
-  const boxes: BoxDiagnostic[] = input.labels.map((label, index) => {
+  const boxes: BoxDiagnostic[] = labels.map((label, index) => {
     const expectedCategory = expectedByIndex.get(index) ?? null;
     const actual = removals.get(index) ?? null;
     const wm = watermarkDiag.get(index);
@@ -306,6 +312,7 @@ export function buildReport(input: BuildReportInput): DiagnosticReport {
     return {
       index,
       label,
+      geometry: computeGeometry(annotations[index]),
       expected: expectedCategory,
       actual,
       verdict: output ? judge(expectedCategory, actual) : "kept",
@@ -370,7 +377,7 @@ export function buildReport(input: BuildReportInput): DiagnosticReport {
     meta: {
       generatedAt: new Date().toISOString(),
       sourceFile: input.sourceName,
-      totalWords: input.labels.length,
+      totalWords: labels.length,
       durationMs: input.durationMs,
       ...input.env,
     },

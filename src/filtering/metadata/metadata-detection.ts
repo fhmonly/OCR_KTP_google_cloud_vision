@@ -1,9 +1,13 @@
 import type { ProjectedBox } from "../../types.js";
+
 import type {
   MetadataBoxDiagnostic,
+  MetadataClassification,
   MetadataDetectionOptions,
   MetadataDetectionResult,
   MetadataGroup,
+  MetadataRegionConfig,
+  MetadataType,
 } from "./metadata-types.js";
 
 interface Bounds {
@@ -200,6 +204,189 @@ function getDateMatches(
   return matches;
 }
 
+function clampRatio(value: number): number {
+  return Math.min(1, Math.max(0, value));
+}
+
+function getRelativeRegionBounds(
+  bounds: Bounds,
+  region: MetadataRegionConfig,
+): Bounds | null {
+  const uStart = clampRatio(region.uStartRatio);
+  const uEnd = clampRatio(region.uEndRatio);
+  const vStart = clampRatio(region.vStartRatio);
+  const vEnd = clampRatio(region.vEndRatio);
+
+  if (uStart >= uEnd || vStart >= vEnd) {
+    return null;
+  }
+
+  const width = bounds.maxU - bounds.minU;
+  const height = bounds.maxV - bounds.minV;
+
+  if (width <= 0 || height <= 0) {
+    return null;
+  }
+
+  return {
+    minU: bounds.minU + width * uStart,
+    maxU: bounds.minU + width * uEnd,
+    minV: bounds.minV + height * vStart,
+    maxV: bounds.minV + height * vEnd,
+  };
+}
+
+function getBoxOverlapRatio(box: ProjectedBox, region: Bounds): number {
+  const boxWidth = box.uMax - box.uMin;
+  const boxHeight = box.vMax - box.vMin;
+
+  if (
+    !Number.isFinite(boxWidth) ||
+    !Number.isFinite(boxHeight) ||
+    boxWidth <= 0 ||
+    boxHeight <= 0
+  ) {
+    return 0;
+  }
+
+  const intersectionWidth = Math.max(
+    0,
+    Math.min(box.uMax, region.maxU) - Math.max(box.uMin, region.minU),
+  );
+
+  const intersectionHeight = Math.max(
+    0,
+    Math.min(box.vMax, region.maxV) - Math.max(box.vMin, region.minV),
+  );
+
+  const intersectionArea = intersectionWidth * intersectionHeight;
+  const boxArea = boxWidth * boxHeight;
+
+  return Math.min(1, intersectionArea / boxArea);
+}
+
+function isSignatureMarker(text: string): boolean {
+  const normalized = normalizeText(text)
+    .replace(/[.:,;]/g, "")
+    .trim();
+
+  return SIGNATURE_PATTERN.test(normalized);
+}
+
+function applyMetadataRegion(
+  boxes: ProjectedBox[],
+  bounds: Bounds,
+  metadataRegion: MetadataRegionConfig,
+  signatureRegion: MetadataRegionConfig | undefined,
+  overlapThreshold: number,
+  candidateIndexes: Set<number>,
+  metadataIndexes: Set<number>,
+  diagnostics: MetadataBoxDiagnostic[],
+): void {
+  const regionBounds = getRelativeRegionBounds(bounds, metadataRegion);
+
+  if (!regionBounds) {
+    return;
+  }
+
+  const signatureBounds =
+    signatureRegion === undefined
+      ? null
+      : getRelativeRegionBounds(bounds, signatureRegion);
+
+  const diagnosticIndexByOriginal = new Map<number, number>();
+
+  diagnostics.forEach((diagnostic, index) => {
+    diagnosticIndexByOriginal.set(diagnostic.originalIndex, index);
+  });
+
+  for (const box of boxes) {
+    const overlapRatio = getBoxOverlapRatio(box, regionBounds);
+
+    if (overlapRatio <= 0) {
+      continue;
+    }
+
+    const label = box.box.label?.trim() ?? "";
+    const normalizedLabel = normalizeText(label);
+
+    const signatureOverlap =
+      signatureBounds === null ? 0 : getBoxOverlapRatio(box, signatureBounds);
+
+    const isSignature =
+      isSignatureMarker(label) || signatureOverlap >= overlapThreshold;
+
+    const existingDiagnosticIndex = diagnosticIndexByOriginal.get(
+      box.originalIndex,
+    );
+
+    const existingDiagnostic =
+      existingDiagnosticIndex === undefined
+        ? undefined
+        : diagnostics[existingDiagnosticIndex];
+
+    let type: MetadataType;
+
+    if (isSignature) {
+      type = "signature";
+    } else if (
+      existingDiagnostic?.type === "place-made" ||
+      existingDiagnostic?.type === "date-made"
+    ) {
+      type = existingDiagnostic.type;
+    } else if (isDateText(normalizedLabel)) {
+      type = "date-made";
+    } else {
+      type = "other";
+    }
+
+    const confirmed =
+      overlapRatio >= overlapThreshold ||
+      existingDiagnostic?.classification === "metadata";
+
+    const classification: MetadataClassification = confirmed
+      ? "metadata"
+      : "metadata-candidate";
+
+    candidateIndexes.add(box.originalIndex);
+
+    if (confirmed) {
+      metadataIndexes.add(box.originalIndex);
+    }
+
+    const confidence = Math.max(
+      existingDiagnostic?.confidence ?? 0,
+      overlapRatio,
+    );
+
+    const regionId = metadataRegion.id ?? "metadata-region";
+
+    const diagnostic: MetadataBoxDiagnostic = {
+      originalIndex: box.originalIndex,
+      label,
+      type,
+      classification,
+      confidence,
+      regionId,
+      overlapRatio,
+      ...(existingDiagnostic?.groupId === undefined
+        ? {}
+        : { groupId: existingDiagnostic.groupId }),
+      reason:
+        `Box overlaps region "${regionId}" ` +
+        `with ratio ${overlapRatio.toFixed(3)}.`,
+    };
+
+    if (existingDiagnosticIndex === undefined) {
+      diagnosticIndexByOriginal.set(box.originalIndex, diagnostics.length);
+
+      diagnostics.push(diagnostic);
+    } else {
+      diagnostics[existingDiagnosticIndex] = diagnostic;
+    }
+  }
+}
+
 export function detectMetadata(
   boxes: ProjectedBox[],
   options: MetadataDetectionOptions = {},
@@ -384,6 +571,21 @@ export function detectMetadata(
     if (confirmed) {
       metadataIndexes.add(box.originalIndex);
     }
+  }
+
+  if (options.metadataRegion !== undefined) {
+    const overlapThreshold = clampRatio(options.regionOverlapThreshold ?? 0.5);
+
+    applyMetadataRegion(
+      boxes,
+      bounds,
+      options.metadataRegion,
+      options.signatureRegion,
+      overlapThreshold,
+      candidateIndexes,
+      metadataIndexes,
+      diagnostics,
+    );
   }
 
   return {

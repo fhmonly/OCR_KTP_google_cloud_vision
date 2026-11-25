@@ -831,3 +831,21 @@ code {
     margin-left: 0;
   }
 }
+
+.vertices {
+  display: inline-block;
+  font:
+    11px/1.45 ui-monospace,
+    monospace;
+  white-space: nowrap;
+}
+
+.diag-table td:first-child,
+.diag-table th:first-child {
+  white-space: nowrap;
+}
+
+/* Tabel geometri lebar: scroll horizontal, jangan menyempit. */
+#pane-removed .diag-table {
+  min-width: 1280px;
+}

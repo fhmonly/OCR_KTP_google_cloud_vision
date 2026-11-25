@@ -130,6 +130,7 @@ export function initDiagnosticUi(host: DiagnosticHost): DiagnosticUi {
   ];
   const panes = {
     summary: $("pane-summary"),
+    removed: $("pane-removed"),
     extraction: $("pane-extraction"),
     pipeline: $("pane-pipeline"),
     boxes: $("pane-boxes"),
@@ -296,6 +297,99 @@ export function initDiagnosticUi(host: DiagnosticHost): DiagnosticUi {
     return lines.length ? lines.join("<br>") : '<span class="muted">no detector info</span>';
   }
 
+  const GEOMETRY_HEADERS = [
+    "Degree v0>v1",
+    "Bottom edge v3>v2",
+    "Center",
+    "Size WxH",
+    "Area",
+    "BBox",
+    "Vertices (v0..)",
+  ];
+
+  function geometryCells(b: BoxDiagnostic): string[] {
+    const g = b.geometry;
+    const vertices = g.vertices.length
+      ? g.vertices.map((v) => `(${v.x}, ${v.y})`).join("<br>") +
+        (g.hadMissingCoordinates
+          ? '<br><span class="muted">missing x/y read as 0</span>'
+          : "")
+      : dash;
+    return [
+      g.degree === null
+        ? dash
+        : `${fx(g.degree, 2)}°<br><span class="muted">${fx(g.degreeNormalized, 2)}° norm</span>`,
+      g.bottomEdgeDegree === null ? dash : `${fx(g.bottomEdgeDegree, 2)}°`,
+      g.center ? `(${g.center.x}, ${g.center.y})` : dash,
+      g.width === null ? dash : `${fx(g.width, 1)} × ${fx(g.height, 1)}`,
+      g.area === null ? dash : String(g.area),
+      g.bbox
+        ? `(${g.bbox.minX}, ${g.bbox.minY})<br>(${g.bbox.maxX}, ${g.bbox.maxY})<br><span class="muted">${g.bbox.width} × ${g.bbox.height}</span>`
+        : dash,
+      `<span class="vertices">${vertices}</span>`,
+    ];
+  }
+
+  function renderRemoved(r: DiagnosticReport): string {
+    const parts: string[] = [];
+    const expectedBoxes = r.boxes.filter((b) => b.expected !== null);
+    const actualBoxes = r.boxes.filter((b) => b.actual !== null);
+
+    parts.push(
+      '<p class="muted">Geometry from <code>boundingPoly.vertices</code> ' +
+        "(v0 top-left, v1 top-right, v2 bottom-right, v3 bottom-left in the text frame). " +
+        "Degree = angle v0&gt;v1, same as the canvas. Click a row to select the box.</p>",
+    );
+
+    parts.push(`<h4>Expected removed (${expectedBoxes.length})</h4>`);
+    parts.push(
+      table(
+        ["#", "Label", "Expected", "Actually", "Verdict", ...GEOMETRY_HEADERS],
+        expectedBoxes.map((b) => [
+          `<b>${b.index}</b>`,
+          esc(b.label),
+          show(b.expected),
+          b.actual
+            ? esc(`removed by ${b.actual}`)
+            : r.comparison
+              ? badge("kept", "muted")
+              : dash,
+          badge(b.verdict, VERDICT_KIND[b.verdict] ?? "muted"),
+          ...geometryCells(b),
+        ]),
+        { clickable: expectedBoxes.map((b) => b.index) },
+      ),
+    );
+
+    parts.push(`<h4>Actual removed (${actualBoxes.length})</h4>`);
+    parts.push(
+      r.comparison
+        ? table(
+            [
+              "#",
+              "Label",
+              "Removed by",
+              "Expected",
+              "Verdict",
+              ...GEOMETRY_HEADERS,
+              "Detector info",
+            ],
+            actualBoxes.map((b) => [
+              `<b>${b.index}</b>`,
+              esc(b.label),
+              show(b.actual),
+              b.expected ? esc(b.expected) : badge("not expected", "warn"),
+              badge(b.verdict, VERDICT_KIND[b.verdict] ?? "muted"),
+              ...geometryCells(b),
+              detectorSummary(b),
+            ]),
+            { clickable: actualBoxes.map((b) => b.index) },
+          )
+        : '<p class="muted">Extraction did not complete, so the actual removal is unknown.</p>',
+    );
+    return parts.join("");
+  }
+
   function renderExtraction(r: DiagnosticReport): string {
     const ex = r.extraction;
     if (!ex) return '<p class="muted">Extraction did not complete.</p>';
@@ -455,6 +549,8 @@ export function initDiagnosticUi(host: DiagnosticHost): DiagnosticUi {
       [
         "#",
         "Label",
+        "Degree",
+        "Center",
         "Expected",
         "Actual",
         "Verdict",
@@ -465,6 +561,10 @@ export function initDiagnosticUi(host: DiagnosticHost): DiagnosticUi {
       rows.map((b) => [
         `<b>${b.index}</b>`,
         esc(b.label),
+        b.geometry.degree === null ? dash : `${fx(b.geometry.degree, 2)}°`,
+        b.geometry.center
+          ? `(${b.geometry.center.x}, ${b.geometry.center.y})`
+          : dash,
         show(b.expected),
         show(b.actual),
         badge(b.verdict, VERDICT_KIND[b.verdict] ?? "muted"),
@@ -497,6 +597,7 @@ export function initDiagnosticUi(host: DiagnosticHost): DiagnosticUi {
       "</span>";
 
     panes.summary.innerHTML = renderSummary(report);
+    panes.removed.innerHTML = renderRemoved(report);
     panes.extraction.innerHTML = renderExtraction(report);
     panes.pipeline.innerHTML = renderPipeline(report);
     boxesTable.innerHTML = renderBoxes(report);
@@ -758,6 +859,12 @@ export function initDiagnosticUi(host: DiagnosticHost): DiagnosticUi {
         );
       }
       if (box.usedBy.length) lines.push(`Used by: ${box.usedBy.join(", ")}`);
+      const g = box.geometry;
+      if (g.center) {
+        lines.push(
+          `Center: (${g.center.x}, ${g.center.y}) · size ${fx(g.width, 1)} × ${fx(g.height, 1)} · bottom edge ${fx(g.bottomEdgeDegree, 2)}°`,
+        );
+      }
       return lines;
     },
   };
