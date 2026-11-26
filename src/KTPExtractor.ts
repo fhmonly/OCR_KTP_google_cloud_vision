@@ -1,8 +1,9 @@
 import { ImageAnnotatorClient, type v1 } from "@google-cloud/vision";
-import { applyCityFallback } from "./association/city-fallback.js";
 import { associateLabelValues } from "./association/label-value-association.js";
-import { KTP_LABELS } from "./extraction-config.js";
 import { sortWordBoxes } from "./sorting/sort-word-boxes.js";
+
+import { detectKtpHeader } from "./association/header-detector.js";
+import { KTP_BODY_LABELS } from "./extraction-config.js";
 
 type ImageAnnotatorClientResponse = Awaited<
   ReturnType<v1.ImageAnnotatorClient["textDetection"]>
@@ -109,42 +110,84 @@ export class KTPExtractor {
     }
 
     const boxes = result.projected;
-    const definitions = KTP_LABELS;
+
     const labelThreshold = 0.65;
+
     const options = {
       labelThreshold: 0.65,
-
       maxLabelGapFactor: 3,
-
       maxInterWordGapFactor: 2.5,
-
       maxVerticalDistanceFactor: 0.9,
-
       sameRowToleranceFactor: 0.75,
-
       maxWords: 12,
     };
 
-    const association = associateLabelValues(
-      boxes,
-      definitions,
+    // 1. Header detection independen.
+    const headerResult = detectKtpHeader(boxes, {
+      labelThreshold,
+      maxLabelGapFactor: 3,
+      maxInterWordGapFactor: 2.5,
+      maxVerticalDistanceFactor: 0.9,
+      sameRowToleranceFactor: 0.75,
+      maxWords: 12,
+    });
+
+    // 2. Batasi body search mulai dari baris NIK.
+    // Jika anchor NIK tidak ditemukan, gunakan seluruh box
+    // agar extraction body tetap memiliki fallback.
+    const nikAnchor = boxes.find(
+      (box) => box.originalIndex === headerResult.anchorIndex,
+    );
+
+    const bodyBoxes = nikAnchor
+      ? boxes.filter((box) => box.centerV >= nikAnchor.centerV)
+      : boxes;
+
+    // 3. Body association hanya menggunakan label body.
+    const bodyAssociation = associateLabelValues(
+      bodyBoxes,
+      KTP_BODY_LABELS,
       labelThreshold,
       options,
     );
 
-    const finalAssociation = applyCityFallback(
-      result.rows,
-      association,
-      definitions,
-    );
+    // 4. Gabungkan hasil header dan body sebelum city fallback.
+    // City fallback membutuhkan province dan NIK sebagai anchor.
+    const mergedAssociation = {
+      fields: [...headerResult.association.fields, ...bodyAssociation.fields],
+      unmatchedLabels: [
+        ...headerResult.association.unmatchedLabels,
+        ...bodyAssociation.unmatchedLabels,
+      ],
+      usedWordIndexes: [
+        ...new Set([
+          ...headerResult.association.usedWordIndexes,
+          ...bodyAssociation.usedWordIndexes,
+        ]),
+      ],
+      diagnostics: [
+        ...(headerResult.association.diagnostics ?? []),
+        ...(bodyAssociation.diagnostics ?? []),
+      ],
+    };
+
+    const finalAssociation = mergedAssociation;
 
     const data = Object.fromEntries(
-      finalAssociation.fields.map((v) => [v.field, v.value]),
+      finalAssociation.fields.map((field) => [field.field, field.value]),
     );
 
     return {
       data,
       association: finalAssociation,
+      header: {
+        detected: headerResult.detected,
+        anchorIndex: headerResult.anchorIndex,
+        candidateIndexes: headerResult.candidateIndexes,
+        acceptedIndexes: headerResult.acceptedIndexes,
+        rejectedIndexes: headerResult.rejectedIndexes,
+        association: headerResult.association,
+      },
     };
   }
 

@@ -1,6 +1,6 @@
 import type { LabelDefinition } from "./association/association-types.js";
 
-export const KTP_LABELS: LabelDefinition[] = [
+export const KTP_HEADER_LABELS: LabelDefinition[] = [
   {
     field: "province",
     aliases: ["Provinsi"],
@@ -9,6 +9,9 @@ export const KTP_LABELS: LabelDefinition[] = [
     field: "city",
     aliases: ["Kota", "Kabupaten"],
   },
+];
+
+export const KTP_BODY_LABELS: LabelDefinition[] = [
   {
     field: "identity_number",
     aliases: ["NIK"],
@@ -65,4 +68,10 @@ export const KTP_LABELS: LabelDefinition[] = [
     field: "expired_date",
     aliases: ["Berlaku Hingga"],
   },
+];
+
+// Compatibility untuk kode yang masih menggunakan KTP_LABELS.
+export const KTP_LABELS: LabelDefinition[] = [
+  ...KTP_HEADER_LABELS,
+  ...KTP_BODY_LABELS,
 ];

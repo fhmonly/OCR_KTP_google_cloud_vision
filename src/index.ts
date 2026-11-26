@@ -16,3 +16,4 @@ export * from "./association/value-candidate.js";
 export { applyCityFallback } from "./association/city-fallback.js";
 
 export type { CityFallbackOptions } from "./association/city-fallback.js";
+export * from "./association/header-detector.js";
