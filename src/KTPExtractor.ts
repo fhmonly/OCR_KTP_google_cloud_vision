@@ -9,6 +9,7 @@ import { filterValidBoundingPoly } from "./filtering/bounding-poly/bounding-poly
 import { filterWatermarkBoxes } from "./filtering/watermark/watermark-filter.js";
 import type { TransformedTextAnnotation } from "./types.js";
 
+import { detectLabelValueRegions } from "./association/label-value-region.js";
 import {
   detectKtpBoundary,
   filterOutsideKtpBoxes,
@@ -189,26 +190,12 @@ export class KTPExtractor {
         };
 
     // Box yang diteruskan ke association.
-    const boxes = ktpBoundaryFiltering.boxes;
 
-    // Gabungkan index yang dihapus.
-    const removedIndexes = new Set<number>([
-      ...watermarkFiltering.removedIndexes,
-      ...metadataFiltering.removedIndexes,
-      ...ktpBoundaryFiltering.outsideIndexes,
-    ]);
-
-    const filteredRows = result.rows
-      .map((row) => ({
-        ...row,
-        boxes: row.boxes.filter(
-          (box) => !removedIndexes.has(box.originalIndex),
-        ),
-      }))
-      .filter((row) => row.boxes.length > 0);
+    const allBoxes = result.projected;
 
     const definitions = KTP_LABELS;
     const labelThreshold = 0.65;
+
     const options = {
       labelThreshold: 0.65,
 
@@ -223,6 +210,22 @@ export class KTPExtractor {
       maxWords: 12,
     };
 
+    // STEP 1: Detect label-value regions.
+    const regionResult = detectLabelValueRegions(
+      allBoxes,
+      definitions,
+      labelThreshold,
+      options,
+    );
+
+    console.log("Label indexes:", regionResult.labelIndexes);
+    console.log("Value indexes:", regionResult.valueIndexes);
+    console.log("Unrelated indexes:", regionResult.unrelatedIndexes);
+
+    // STEP 2: Filter boxes outside label-value regions.
+    const boxes = regionResult.filteredBoxes;
+
+    // STEP 3: Associate labels with values.
     const association = associateLabelValues(
       boxes,
       definitions,
@@ -231,7 +234,7 @@ export class KTPExtractor {
     );
 
     const finalAssociation = applyCityFallback(
-      filteredRows,
+      result.rows,
       association,
       definitions,
     );

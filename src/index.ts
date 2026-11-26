@@ -29,8 +29,6 @@ export * from "./filtering/watermark/watermark-orientation.js";
 
 export * as metadataService from "./filtering/metadata/index.js";
 
-export * from "./filtering/ktp-region/ktp-region-detection.js";
-export * from "./filtering/ktp-region/ktp-region-filter.js";
-export * from "./filtering/ktp-region/ktp-region-types.js";
+export * from "./association/label-value-region.js";
 
 export * from "./filtering/ktp-boundary/index.js";
